@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+dist/
+build/
+*.egg-info/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data
+*.csv
+
+# Reports / binaries (large generated artifacts)
+reports/*.docx
+reports/*.pptx
+
+# OS
+desktop.ini
+.DS_Store

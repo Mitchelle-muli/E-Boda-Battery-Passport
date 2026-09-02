@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fleet Ops — EV Battery Ecosystem Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #080B10;
+    --panel: #10161E;
+    --panel-2: #151D27;
+    --line: #212B37;
+    --text: #E9EEF3;
+    --muted: #8AA0B2;
+    --muted-2: #5C7284;
+    --green: #35D68A;
+    --green-dim: #1C6B48;
+    --red: #FF5C4D;
+    --red-dim: #6B241D;
+    --amber: #F5B942;
+    --amber-dim: #6B4E12;
+    --volt: #D4FF3D;
+    --focus: #6FE3FF;
+    --accent: #35D68A;   /* set per active company */
+    --accent-dim: #1C6B48;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(1100px 500px at 15% -10%, color-mix(in srgb, var(--accent) 11%, transparent), transparent 60%),
+      radial-gradient(900px 500px at 100% 0%, rgba(255,92,77,0.05), transparent 55%),
+      linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px),
+      var(--bg);
+    background-size:auto,auto,44px 44px,44px 44px;
+    color:var(--text);
+    font-family:'Inter',system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+    transition:background-color .4s ease;
+  }
+  .mono{font-family:'JetBrains Mono',monospace;}
+  .display{font-family:'Space Grotesk',sans-serif;}
+  a{color:inherit;}
+  :focus-visible{outline:2px solid var(--focus); outline-offset:2px; border-radius:4px;}
+  .wrap{max-width:1400px;margin:0 auto;padding:22px 24px 80px;}
+  button, select, textarea, input{font-family:inherit;}
+
+  /* ---------- Top bar: brand + live clock ---------- */
+  .topbar{
+    display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+    margin:-22px -24px 18px;padding:16px 24px;
+    background:linear-gradient(180deg, rgba(8,11,16,0.92), rgba(8,11,16,0.75));
+    backdrop-filter:blur(10px);position:sticky;top:0;z-index:20;
+    border-bottom:1px solid var(--line);
+  }
+  .brand{display:flex;align-items:center;gap:12px;}
+  .brand-mark{
+    width:38px;height:38px;border-radius:10px;
+    background:linear-gradient(145deg, var(--accent), var(--accent-dim));
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;
+    box-shadow:0 0 0 1px rgba(255,255,255,0.08), 0 6px 18px -6px color-mix(in srgb, var(--accent) 60%, transparent);
+    transition:background .4s ease, box-shadow .4s ease;
+  }
+  .brand-mark svg{width:20px;height:20px;}
+  .brand h1{font-size:16px;margin:0;font-weight:700;letter-spacing:0.04em;}
+  .brand .sub{color:var(--muted-2);font-size:11px;margin-top:1px;}
+  .live-indicator{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--muted);background:var(--panel);border:1px solid var(--line);padding:7px 13px;border-radius:20px;}
+  .live-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 0 rgba(53,214,138,0.6);animation:pulse 1.8s infinite;}
+  @keyframes pulse{
+    0%{box-shadow:0 0 0 0 rgba(53,214,138,0.55);}
+    70%{box-shadow:0 0 0 7px rgba(53,214,138,0);}
+    100%{box-shadow:0 0 0 0 rgba(53,214,138,0);}
+  }
+  #clock{font-family:'JetBrains Mono',monospace;color:var(--text);}
+
+  /* ---------- Company tabs ---------- */
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:26px;border-bottom:1px solid var(--line);padding-bottom:0;}
+  .tab{
+    display:flex;align-items:center;gap:8px;padding:12px 18px;border-radius:12px 12px 0 0;
+    background:transparent;border:1px solid transparent;cursor:pointer;color:var(--muted);
+    font-size:13px;font-weight:600;transition:all .15s;position:relative;top:1px;
+  }
+  .tab .swatch{width:7px;height:7px;border-radius:50%;flex-shrink:0;box-shadow:0 0 8px 1px currentColor;}
+  .tab .vt{font-size:9.5px;color:var(--muted-2);font-family:'JetBrains Mono',monospace;}
+  .tab.active{background:var(--panel);border-color:var(--line);border-bottom-color:var(--panel);color:var(--text);box-shadow:0 -4px 16px -8px rgba(0,0,0,0.5);}
+  .tab.active::after{content:'';position:absolute;left:14px;right:14px;bottom:-1px;height:2px;background:var(--accent);border-radius:2px;}
+  .tab:hover:not(.active){color:var(--text);}
+  .tab .badge{
+    font-size:9.5px;font-weight:700;background:var(--red);color:#fff;padding:1px 6px;border-radius:20px;
+  }
+
+  /* ---------- Header / stats ---------- */
+  .page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:22px;}
+  .page-head h2{font-size:22px;margin:0 0 4px;font-weight:700;}
+  .page-head .desc{font-size:13px;color:var(--muted);max-width:560px;line-height:1.5;}
+  .demo-flag{
+    display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:var(--amber);
+    background:rgba(245,185,66,0.1);border:1px solid rgba(245,185,66,0.3);padding:3px 9px;border-radius:20px;
+    margin-top:8px;font-weight:600;
+  }
+  .real-flag{
+    display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:var(--green);
+    background:rgba(53,214,138,0.1);border:1px solid rgba(53,214,138,0.3);padding:3px 9px;border-radius:20px;
+    margin-top:8px;font-weight:600;
+  }
+  .stat-strip{display:flex;gap:10px;flex-wrap:wrap;}
+  .stat-chip{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:11px 17px;min-width:98px;transition:transform .15s, border-color .15s;box-shadow:0 10px 22px -16px rgba(0,0,0,0.6);}
+  .stat-chip:hover{transform:translateY(-2px);border-color:#37475A;}
+  .stat-chip .n{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:600;line-height:1;transition:color .2s;}
+  .stat-chip .l{font-size:10.5px;color:var(--muted);margin-top:6px;text-transform:uppercase;letter-spacing:0.05em;}
+  .stat-chip.alert .n{color:var(--red);}
+  .stat-chip.warn .n{color:var(--amber);}
+  .stat-chip.ok .n{color:var(--accent);}
+
+  /* ---------- Section headers / panels ---------- */
+  .section-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px;gap:12px;flex-wrap:wrap;}
+  .section-head h3{font-size:15px;margin:0;font-weight:600;}
+  .section-head .hint{font-size:12px;color:var(--muted);}
+  .eyebrow{font-size:11px;color:var(--muted-2);text-transform:uppercase;letter-spacing:0.09em;font-weight:600;margin-bottom:4px;}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:0 14px 32px -20px rgba(0,0,0,0.6);}
+
+  /* ---------- Filters ---------- */
+  .filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px;}
+  .filter-btn{
+    padding:6px 12px;border-radius:20px;border:1px solid var(--line);background:var(--panel-2);
+    color:var(--muted);font-size:11.5px;font-weight:600;cursor:pointer;
+  }
+  .filter-btn.active{border-color:var(--accent);color:var(--accent);background:color-mix(in srgb, var(--accent) 12%, transparent);}
+  .search-box{
+    margin-left:auto;background:var(--panel-2);border:1px solid var(--line);border-radius:20px;
+    padding:6px 14px;font-size:12px;color:var(--text);width:160px;
+  }
+  .search-box::placeholder{color:var(--muted-2);}
+
+  /* ---------- Rack (scales to many rows) ---------- */
+  .rack{
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:9px;
+    max-height:460px;overflow-y:auto;padding:2px 4px 2px 2px;
+  }
+  .rack::-webkit-scrollbar{width:6px;} .rack::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px;}
+  .cell{
+    background:var(--panel-2);border:1px solid var(--line);border-radius:11px;
+    padding:10px 8px 8px;cursor:pointer;position:relative;text-align:center;
+    transition:transform .12s ease, border-color .12s ease;
+  }
+  .cell:hover{transform:translateY(-2px);border-color:#37475A;}
+  .cell.selected{border-color:var(--focus);background:#152531;box-shadow:0 0 0 1px var(--focus) inset;}
+  .cell .id{font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:600;}
+  .cell .vt-tag{font-size:8.5px;color:var(--muted-2);font-family:'JetBrains Mono',monospace;background:#0d141b;border:1px solid var(--line);border-radius:5px;padding:0 4px;display:inline-block;margin-top:2px;}
+  .battery-icon{width:26px;height:40px;margin:7px auto 4px;position:relative;}
+  .battery-icon .nub{width:9px;height:4px;background:var(--muted-2);border-radius:2px 2px 0 0;margin:0 auto;}
+  .battery-icon .body{width:26px;height:36px;border:1.6px solid var(--muted-2);border-radius:4px;display:flex;align-items:flex-end;overflow:hidden;background:#0d141b;}
+  .battery-icon .fill{width:100%;transition:height .4s ease;}
+  .cell.status-normal .body{border-color:#2F5240;} .cell.status-normal .fill{background:linear-gradient(180deg,#4FE79E,var(--green-dim));}
+  .cell.status-warning .body{border-color:#7A5F26;} .cell.status-warning .fill{background:linear-gradient(180deg,#FFCE6E,var(--amber-dim));}
+  .cell.status-flagged .body{border-color:#7A362C;} .cell.status-flagged .fill{background:linear-gradient(180deg,#FF8A7E,var(--red-dim));}
+  .cell .soh{font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:600;margin-top:1px;}
+  .cell.status-normal .soh{color:var(--green);} .cell.status-warning .soh{color:var(--amber);} .cell.status-flagged .soh{color:var(--red);}
+  .cell .zone{font-size:9px;color:var(--muted-2);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .flag-badge{position:absolute;top:-5px;right:-5px;background:var(--red);color:#1A0705;font-size:8px;font-weight:700;padding:2px 5px;border-radius:20px;box-shadow:0 2px 6px rgba(0,0,0,0.4);}
+  .report-badge{position:absolute;top:-5px;left:-5px;width:14px;height:14px;border-radius:50%;background:var(--amber);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.4);}
+  .report-badge svg{width:8px;height:8px;fill:#1A1204;}
+  .legend{display:flex;gap:16px;margin-top:14px;flex-wrap:wrap;}
+  .legend span{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
+  .dot.g{background:var(--green);} .dot.a{background:var(--amber);} .dot.r{background:var(--red);} .dot.b{background:var(--amber);}
+
+  /* ---------- Layout ---------- */
+  .layout{display:grid;grid-template-columns:1.62fr 1fr;gap:18px;align-items:start;margin-top:20px;}
+  @media (max-width:1000px){ .layout{grid-template-columns:1fr;} }
+
+  /* ---------- Detail panel ---------- */
+  .detail{margin-top:18px;}
+  .detail-top{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:16px;}
+  .detail-top h4{font-size:18px;margin:0 0 5px;font-family:'Space Grotesk',sans-serif;}
+  .detail-top .subline{font-size:11.5px;color:var(--muted);}
+  .status-pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;padding:4px 11px;border-radius:20px;text-transform:uppercase;letter-spacing:0.04em;}
+  .status-pill.normal{background:rgba(53,214,138,0.12);color:var(--green);border:1px solid rgba(53,214,138,0.35);}
+  .status-pill.warning{background:rgba(245,185,66,0.12);color:var(--amber);border:1px solid rgba(245,185,66,0.35);}
+  .status-pill.flagged{background:rgba(255,92,77,0.12);color:var(--red);border:1px solid rgba(255,92,77,0.35);}
+  .live-soc-badge{display:flex;align-items:center;gap:7px;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:8px 13px;}
+  .live-soc-badge .v{font-family:'JetBrains Mono',monospace;font-size:19px;font-weight:700;}
+  .live-soc-badge .l{font-size:9.5px;color:var(--muted-2);text-transform:uppercase;}
+
+  .metrics-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:16px;}
+  @media (max-width:700px){ .metrics-grid{grid-template-columns:repeat(2,1fr);} }
+  .metric{background:var(--panel-2);padding:11px 13px;}
+  .metric .v{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:600;}
+  .metric .l{font-size:10px;color:var(--muted);margin-top:3px;text-transform:uppercase;letter-spacing:0.04em;}
+  .metric.bad .v{color:var(--red);} .metric.warn .v{color:var(--amber);}
+
+  .charts-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;}
+  @media (max-width:700px){ .charts-row{grid-template-columns:1fr;} }
+  .chart-box{background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:14px;}
+  .chart-box .ct{font-size:11.5px;color:var(--muted);margin-bottom:8px;display:flex;justify-content:space-between;}
+  .chart-box svg{width:100%;height:auto;display:block;}
+
+  .signals-box{background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;}
+  .signals-box .ct{font-size:11.5px;color:var(--muted);margin-bottom:8px;}
+  .sig-chip{display:inline-flex;align-items:center;gap:6px;font-size:11px;background:rgba(255,92,77,0.1);color:var(--red);border:1px solid rgba(255,92,77,0.3);padding:4px 10px;border-radius:20px;margin:0 6px 6px 0;}
+  .sig-chip .t{color:var(--muted-2);font-family:'JetBrains Mono',monospace;font-size:9.5px;}
+  .no-sig{font-size:11.5px;color:var(--muted-2);}
+
+  /* ---------- Fleet bar chart ---------- */
+  .barchart-wrap{margin-top:18px;}
+  .bars{display:flex;align-items:flex-end;gap:7px;height:140px;padding:0 4px;overflow-x:auto;}
+  .bar-col{flex:0 0 auto;width:34px;display:flex;flex-direction:column;align-items:center;height:100%;justify-content:flex-end;cursor:pointer;}
+  .bar-col .bar{width:100%;max-width:28px;border-radius:4px 4px 0 0;transition:opacity .15s;}
+  .bar-col:hover .bar{opacity:0.75;}
+  .bar-col.status-normal .bar{background:linear-gradient(180deg,#4FE79E,var(--green-dim));}
+  .bar-col.status-warning .bar{background:linear-gradient(180deg,#FFCE6E,var(--amber-dim));}
+  .bar-col.status-flagged .bar{background:linear-gradient(180deg,#FF8A7E,var(--red-dim));}
+  .bar-col .bv{font-family:'JetBrains Mono',monospace;font-size:9.5px;color:var(--muted);margin-bottom:4px;}
+  .bar-col .bl{font-size:8.5px;color:var(--muted-2);margin-top:5px;font-family:'JetBrains Mono',monospace;white-space:nowrap;}
+
+  /* ---------- Sidebar ---------- */
+  .side-panel + .side-panel{margin-top:18px;}
+  .role-toggle{display:flex;gap:8px;margin-bottom:16px;}
+  .role-btn{flex:1;padding:9px 10px;border-radius:9px;border:1px solid var(--line);background:var(--panel-2);color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .12s;}
+  .role-btn.active[data-role="IT"]{border-color:var(--focus);color:var(--focus);background:rgba(111,227,255,0.08);}
+  .role-btn.active[data-role="Customer Service"]{border-color:var(--accent);color:var(--accent);background:color-mix(in srgb, var(--accent) 10%, transparent);}
+  .role-context{font-size:11.5px;color:var(--muted);background:var(--panel-2);border:1px solid var(--line);border-radius:9px;padding:9px 12px;margin-bottom:14px;line-height:1.45;}
+
+  label{display:block;font-size:11px;color:var(--muted);margin:13px 0 6px;text-transform:uppercase;letter-spacing:0.05em;}
+  label:first-of-type{margin-top:0;}
+  select, textarea, input[type=text]{width:100%;background:var(--panel-2);border:1px solid var(--line);border-radius:9px;color:var(--text);padding:9px 11px;font-size:13px;}
+  select:focus, textarea:focus{border-color:var(--focus);}
+  textarea{resize:vertical;min-height:58px;}
+
+  .live-signals-picker{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px;}
+  .sig-pick{font-size:11px;padding:6px 11px;border-radius:20px;border:1px solid var(--line);background:var(--panel-2);color:var(--muted);cursor:pointer;}
+  .sig-pick.flagged-live{border-color:rgba(255,92,77,0.4);color:var(--red);}
+  .sig-pick.active{border-color:var(--accent);color:var(--accent);background:color-mix(in srgb, var(--accent) 12%, transparent);}
+
+  .sev-row{display:flex;gap:6px;}
+  .sev-btn{flex:1;padding:8px 4px;border-radius:8px;border:1px solid var(--line);background:var(--panel-2);color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;text-align:center;}
+  .sev-btn.active[data-sev="low"]{border-color:var(--green);color:var(--green);background:rgba(53,214,138,0.08);}
+  .sev-btn.active[data-sev="medium"]{border-color:var(--amber);color:var(--amber);background:rgba(245,185,66,0.1);}
+  .sev-btn.active[data-sev="high"]{border-color:#FF8A56;color:#FF8A56;background:rgba(255,138,86,0.1);}
+  .sev-btn.active[data-sev="critical"]{border-color:var(--red);color:var(--red);background:rgba(255,92,77,0.1);}
+
+  .submit-btn{width:100%;margin-top:16px;padding:12px;border-radius:10px;border:none;font-weight:700;font-size:13px;cursor:pointer;letter-spacing:0.01em;transition:filter .12s;}
+  .submit-btn.it-mode{background:linear-gradient(145deg,var(--focus),#2C8FA8);color:#04181D;}
+  .submit-btn.cs-mode{background:linear-gradient(145deg,var(--accent),var(--accent-dim));color:#08130D;}
+  .submit-btn:hover{filter:brightness(1.08);} .submit-btn:active{filter:brightness(0.95);}
+
+  /* ---------- Incident feed ---------- */
+  .feed{display:flex;flex-direction:column;gap:9px;max-height:400px;overflow-y:auto;padding-right:2px;}
+  .feed::-webkit-scrollbar{width:6px;} .feed::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px;}
+  .empty-feed{color:var(--muted-2);font-size:12px;text-align:center;padding:24px 10px;border:1px dashed var(--line);border-radius:10px;}
+  .incident{background:var(--panel-2);border:1px solid var(--line);border-radius:11px;padding:11px 12px;}
+  .incident.pulse-new{animation:flashnew .9s ease;}
+  @keyframes flashnew{0%{background:color-mix(in srgb, var(--accent) 20%, var(--panel-2));} 100%{background:var(--panel-2);}}
+  .incident .row1{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:5px;}
+  .incident .bid{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:12.5px;}
+  .pill{font-size:9.5px;font-weight:700;padding:3px 8px;border-radius:20px;text-transform:uppercase;letter-spacing:0.03em;white-space:nowrap;}
+  .pill.sev-low{background:rgba(53,214,138,0.12);color:var(--green);}
+  .pill.sev-medium{background:rgba(245,185,66,0.14);color:var(--amber);}
+  .pill.sev-high{background:rgba(255,138,86,0.14);color:#FF8A56;}
+  .pill.sev-critical{background:rgba(255,92,77,0.14);color:var(--red);}
+  .incident .desc{font-size:12px;color:#C7D2DB;line-height:1.4;margin-bottom:7px;}
+  .incident .meta{display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--muted-2);flex-wrap:wrap;gap:6px;}
+  .role-tag{background:#0d141b;border:1px solid var(--line);padding:2px 7px;border-radius:6px;font-family:'JetBrains Mono',monospace;}
+  .status-tag{font-weight:700;padding:2px 7px;border-radius:6px;}
+  .status-tag.open{background:rgba(255,92,77,0.1);color:var(--red);}
+  .status-tag.swap_alert_sent{background:rgba(111,227,255,0.1);color:var(--focus);}
+  .status-tag.followed_up{background:rgba(245,185,66,0.12);color:var(--amber);}
+  .status-tag.resolved{background:rgba(53,214,138,0.1);color:var(--green);}
+  .incident .actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;}
+  .mini-btn{font-size:10px;padding:5px 9px;border-radius:7px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;font-weight:600;}
+  .mini-btn:hover{border-color:var(--focus);color:var(--text);}
+  .mini-btn.it{border-color:rgba(111,227,255,0.4);color:var(--focus);}
+  .mini-btn.cs{border-color:rgba(53,214,138,0.4);color:var(--accent);}
+
+  /* ---------- Live monitor ---------- */
+  .monitor{background:#070A0E;border:1px solid var(--line);border-radius:12px;padding:12px 14px;max-height:190px;overflow-y:auto;font-family:'JetBrains Mono',monospace;font-size:11px;}
+  .monitor::-webkit-scrollbar{width:6px;} .monitor::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px;}
+  .mline{padding:3px 0;color:var(--muted);border-bottom:1px dashed #161D26;display:flex;gap:8px;opacity:0;animation:fadein .4s forwards;}
+  @keyframes fadein{to{opacity:1;}}
+  .mline .ts{color:var(--muted-2);flex-shrink:0;}
+  .mline .bidm{color:var(--text);font-weight:600;flex-shrink:0;}
+  .mline.sev-crit{color:var(--red);} .mline.sev-warn{color:var(--amber);} .mline.sev-info{color:var(--muted);}
+
+  /* ---------- Rider directory ---------- */
+  .rider-table-wrap{max-height:340px;overflow-y:auto;padding:0 4px 4px;}
+  .rider-table-wrap::-webkit-scrollbar{width:6px;} .rider-table-wrap::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px;}
+  .rider-table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  .rider-table thead th{
+    position:sticky;top:0;background:var(--panel);text-align:left;color:var(--muted-2);
+    font-size:10px;text-transform:uppercase;letter-spacing:0.06em;font-weight:600;
+    padding:9px 18px;border-bottom:1px solid var(--line);z-index:1;
+  }
+  .rider-table tbody tr{border-bottom:1px solid var(--line);cursor:pointer;transition:background .12s;}
+  .rider-table tbody tr:last-child{border-bottom:none;}
+  .rider-table tbody tr:hover{background:var(--panel-2);}
+  .rider-table tbody tr.sel-row{background:color-mix(in srgb, var(--accent) 8%, transparent);}
+  .rider-table td{padding:10px 18px;vertical-align:middle;}
+  .rider-avatar{
+    display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;
+    background:linear-gradient(145deg,var(--accent),var(--accent-dim));color:#08130D;font-weight:700;font-size:10.5px;
+    margin-right:9px;flex-shrink:0;
+  }
+  .rider-name-cell{display:flex;align-items:center;}
+  .rider-phone{font-family:'JetBrains Mono',monospace;color:var(--text);letter-spacing:0.01em;}
+  .rider-battery-id{font-family:'JetBrains Mono',monospace;font-weight:600;}
+  .rider-status-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:6px;}
+  .rider-status-dot.normal{background:var(--green);} .rider-status-dot.warning{background:var(--amber);} .rider-status-dot.flagged{background:var(--red);}
+  .rider-vt-pill{font-size:9.5px;font-family:'JetBrains Mono',monospace;color:var(--muted);background:var(--panel-2);border:1px solid var(--line);padding:2px 7px;border-radius:6px;}
+  .empty-rider-row td{text-align:center;color:var(--muted-2);padding:26px;font-size:12px;}
+
+  /* ---------- Bound rider card in detail panel ---------- */
+  .rider-bound-card{
+    display:flex;align-items:center;gap:12px;background:var(--panel-2);border:1px solid var(--line);
+    border-radius:12px;padding:11px 14px;margin-bottom:16px;
+  }
+  .rider-bound-card .rider-avatar{width:36px;height:36px;font-size:13px;}
+  .rider-bound-card .rn{font-weight:600;font-size:13.5px;}
+  .rider-bound-card .rp{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);margin-top:2px;}
+  .rider-bound-card .rl{font-size:9.5px;color:var(--muted-2);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:2px;}
+
+  footer{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted-2);font-size:11px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+
+  #toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:#0F1A22;border:1px solid var(--accent);color:var(--text);padding:12px 20px;border-radius:12px;font-size:13px;display:flex;align-items:center;gap:10px;box-shadow:0 12px 32px -8px rgba(0,0,0,0.6);opacity:0;pointer-events:none;transition:all .25s ease;z-index:50;max-width:90vw;}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  #toast svg{width:16px;height:16px;flex-shrink:0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-mark" id="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z" fill="#08130D"/></svg>
+      </div>
+      <div>
+        <h1 class="display">FLEET OPS</h1>
+        <div class="sub">EV battery ecosystem monitor — Kenya</div>
+      </div>
+    </div>
+    <div class="live-indicator">
+      <span class="live-dot"></span> LIVE · <span id="clock">--:--:--</span>
+    </div>
+  </div>
+
+  <div class="tabs" id="tabs"></div>
+
+  <div class="page-head">
+    <div>
+      <h2 class="display" id="ph-title">—</h2>
+      <div class="desc" id="ph-desc">—</div>
+      <div id="ph-flag"></div>
+    </div>
+    <div class="stat-strip">
+      <div class="stat-chip"><div class="n mono" id="stat-total">—</div><div class="l">Units tracked</div></div>
+      <div class="stat-chip alert"><div class="n mono" id="stat-flagged">—</div><div class="l">Flagged now</div></div>
+      <div class="stat-chip warn"><div class="n mono" id="stat-open">—</div><div class="l">Open incidents</div></div>
+      <div class="stat-chip ok"><div class="n mono" id="stat-soh">—</div><div class="l">Fleet avg SOH</div></div>
+    </div>
+  </div>
+
+  <section>
+    <div class="section-head">
+      <h3 class="display">Battery ecosystem</h3>
+      <div class="hint">Live SOH across every unit · updates as new telemetry streams in</div>
+    </div>
+    <div class="filters" id="filters"></div>
+    <div class="rack" id="rack"></div>
+    <div class="legend">
+      <span><i class="dot g"></i>Normal — within control limits</span>
+      <span><i class="dot b"></i>Warning — drifting out of range</span>
+      <span><i class="dot r"></i>Flagged — confirmed anomaly</span>
+    </div>
+  </section>
+
+  <section style="margin-top:26px;">
+    <div class="section-head">
+      <h3 class="display">Rider directory</h3>
+      <div class="hint">Which rider is currently carrying which battery — for swap-now calls and follow-ups</div>
+    </div>
+    <div class="panel" style="padding:0;overflow:hidden;">
+      <div class="filters" style="padding:16px 18px 0;margin-bottom:10px;">
+        <input class="search-box" id="rider-search-box" style="width:220px;" placeholder="Search rider, phone or battery…">
+        <span class="hint" id="rider-count" style="margin-left:auto;"></span>
+      </div>
+      <div class="rider-table-wrap">
+        <table class="rider-table">
+          <thead>
+            <tr><th>Rider</th><th>Phone</th><th>Battery</th><th>Type</th><th>Zone</th><th>Status</th><th></th></tr>
+          </thead>
+          <tbody id="rider-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <div class="layout">
+    <!-- MAIN COLUMN -->
+    <div>
+      <div class="panel detail" id="detail-panel"></div>
+
+      <div class="panel barchart-wrap">
+        <div class="section-head">
+          <h3 class="display">Worst drain rate — top offenders</h3>
+          <div class="hint" id="bars-hint">% state-of-charge lost per hour while riding</div>
+        </div>
+        <div class="bars" id="bars"></div>
+      </div>
+
+      <div class="panel" style="margin-top:18px;">
+        <div class="section-head">
+          <h3 class="display">Real-time signal monitor</h3>
+          <div class="hint">Auto-detected from live telemetry — feeds the issue picker on the right</div>
+        </div>
+        <div class="monitor" id="monitor"></div>
+      </div>
+    </div>
+
+    <!-- SIDEBAR -->
+    <div>
+      <div class="panel side-panel">
+        <div class="eyebrow">IT &amp; Customer Service</div>
+        <h3 class="display" style="margin:0 0 14px;font-size:15px;">Battery incident desk</h3>
+
+        <div class="role-toggle" id="role-toggle">
+          <button type="button" class="role-btn active" data-role="IT">⌁ IT / Telemetry</button>
+          <button type="button" class="role-btn" data-role="Customer Service">☎ Customer Service</button>
+        </div>
+        <div class="role-context" id="role-context"></div>
+
+        <label for="f-battery">Battery unit</label>
+        <select id="f-battery"></select>
+
+        <label>Issue signal</label>
+        <div class="live-signals-picker" id="sig-picker"></div>
+
+        <label for="f-desc">Notes</label>
+        <textarea id="f-desc" placeholder="Add context for the record…"></textarea>
+
+        <label>Severity</label>
+        <div class="sev-row" id="sev-row">
+          <button type="button" class="sev-btn" data-sev="low">Low</button>
+          <button type="button" class="sev-btn" data-sev="medium">Medium</button>
+          <button type="button" class="sev-btn active" data-sev="high">High</button>
+          <button type="button" class="sev-btn" data-sev="critical">Critical</button>
+        </div>
+
+        <button class="submit-btn it-mode" id="submit-btn">⚡ Send swap-now alert to rider</button>
+      </div>
+
+      <div class="panel side-panel">
+        <div class="section-head" style="margin-bottom:12px;">
+          <h3 class="display" style="font-size:14px;">Incident pipeline</h3>
+          <div class="hint" id="feed-count">0 total</div>
+        </div>
+        <div class="feed" id="feed"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <span id="foot-left">Source: fleet telemetry</span>
+    <span>IT sends the swap-now alert · Customer Service follows up with the rider · both close the loop together</span>
+  </footer>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ================= DATA ================= */
+const COMPANIES = {"kofa": {"name": "KOFA", "full": "KOFA Energy", "accent": "#35D68A", "real": true, "vehicle_types": ["2W"], "units": [{"id": "KF-A100", "status": "normal", "soh": 96.6, "drain_rate_hr": 14.3, "ride_duration_min": 149.5, "end_soc": 63.6, "volt_std": 0.72, "volt_mean": 56.0, "soc_mean": 85.7, "temp_max": 28.4, "cur_max": 8.5, "vehicle_type": "2W", "zone": "Kasarani", "live_soc": 63.6, "volt_nominal": 56, "rider_name": "Dennis Wekesa", "rider_phone": "+254 705 787 417"}, {"id": "KF-B101", "status": "flagged", "soh": 71.4, "drain_rate_hr": 71.6, "ride_duration_min": 64.0, "end_soc": 21.6, "volt_std": 2.39, "volt_mean": 52.9, "soc_mean": 54.9, "temp_max": 28.2, "cur_max": 12.5, "vehicle_type": "2W", "zone": "Thika Rd", "live_soc": 21.6, "volt_nominal": 56, "rider_name": "Njeri Achieng", "rider_phone": "+254 702 388 549"}, {"id": "KF-C102", "status": "normal", "soh": 92.1, "drain_rate_hr": 14.5, "ride_duration_min": 149.5, "end_soc": 63.1, "volt_std": 0.74, "volt_mean": 56.0, "soc_mean": 85.6, "temp_max": 31.0, "cur_max": 9.3, "vehicle_type": "2W", "zone": "Rongai", "live_soc": 63.1, "volt_nominal": 56, "rider_name": "Vincent Omondi", "rider_phone": "+254 741 872 053"}, {"id": "KF-D103", "status": "normal", "soh": 98.4, "drain_rate_hr": 14.0, "ride_duration_min": 149.5, "end_soc": 64.7, "volt_std": 0.72, "volt_mean": 56.0, "soc_mean": 86.2, "temp_max": 28.0, "cur_max": 8.9, "vehicle_type": "2W", "zone": "Kayole", "live_soc": 64.7, "volt_nominal": 56, "rider_name": "Fatuma Kiptoo", "rider_phone": "+254 741 574 341"}, {"id": "KF-E104", "status": "normal", "soh": 93.1, "drain_rate_hr": 13.9, "ride_duration_min": 149.5, "end_soc": 65.1, "volt_std": 0.69, "volt_mean": 56.1, "soc_mean": 86.4, "temp_max": 28.3, "cur_max": 8.5, "vehicle_type": "2W", "zone": "Nairobi CBD", "live_soc": 65.1, "volt_nominal": 56, "rider_name": "Sharon Abdi", "rider_phone": "+254 711 001 927"}, {"id": "KF-F105", "status": "normal", "soh": 97.7, "drain_rate_hr": 13.2, "ride_duration_min": 149.5, "end_soc": 66.9, "volt_std": 0.66, "volt_mean": 56.1, "soc_mean": 87.0, "temp_max": 29.3, "cur_max": 8.2, "vehicle_type": "2W", "zone": "Westlands", "live_soc": 66.9, "volt_nominal": 56, "rider_name": "Otieno Wanjiru", "rider_phone": "+254 757 071 006"}, {"id": "KF-G106", "status": "normal", "soh": 98.4, "drain_rate_hr": 15.1, "ride_duration_min": 148.5, "end_soc": 61.9, "volt_std": 0.77, "volt_mean": 56.0, "soc_mean": 85.0, "temp_max": 30.6, "cur_max": 8.9, "vehicle_type": "2W", "zone": "Ruaka", "live_soc": 61.9, "volt_nominal": 56, "rider_name": "Atieno Cheruiyot", "rider_phone": "+254 706 927 044"}, {"id": "KF-H107", "status": "normal", "soh": 97.8, "drain_rate_hr": 13.1, "ride_duration_min": 149.5, "end_soc": 67.4, "volt_std": 0.67, "volt_mean": 56.1, "soc_mean": 87.2, "temp_max": 29.3, "cur_max": 8.3, "vehicle_type": "2W", "zone": "Westlands", "live_soc": 67.4, "volt_nominal": 56, "rider_name": "Samuel Chebet", "rider_phone": "+254 708 809 928"}, {"id": "KF-I108", "status": "flagged", "soh": 80.4, "drain_rate_hr": 85.6, "ride_duration_min": 65.5, "end_soc": 6.8, "volt_std": 4.47, "volt_mean": 53.3, "soc_mean": 48.4, "temp_max": 29.7, "cur_max": 12.3, "vehicle_type": "2W", "zone": "Kasarani", "live_soc": 6.8, "volt_nominal": 56, "rider_name": "Peter Simiyu", "rider_phone": "+254 769 587 488"}, {"id": "KF-J109", "status": "flagged", "soh": 73.5, "drain_rate_hr": 77.8, "ride_duration_min": 69.5, "end_soc": 11.9, "volt_std": 2.87, "volt_mean": 52.9, "soc_mean": 55.0, "temp_max": 28.3, "cur_max": 12.8, "vehicle_type": "2W", "zone": "South B", "live_soc": 11.9, "volt_nominal": 56, "rider_name": "Lucy Kimani", "rider_phone": "+254 702 787 312"}, {"id": "KF-K110", "status": "normal", "soh": 98.2, "drain_rate_hr": 13.4, "ride_duration_min": 149.5, "end_soc": 66.2, "volt_std": 0.69, "volt_mean": 56.1, "soc_mean": 86.9, "temp_max": 31.9, "cur_max": 8.3, "vehicle_type": "2W", "zone": "Nairobi CBD", "live_soc": 66.2, "volt_nominal": 56, "rider_name": "Chebet Owino", "rider_phone": "+254 792 211 840"}, {"id": "KF-L111", "status": "flagged", "soh": 66.9, "drain_rate_hr": 84.1, "ride_duration_min": 61.0, "end_soc": 12.9, "volt_std": 4.36, "volt_mean": 53.7, "soc_mean": 50.6, "temp_max": 28.0, "cur_max": 12.4, "vehicle_type": "2W", "zone": "Ruaka", "live_soc": 12.9, "volt_nominal": 56, "rider_name": "Collins Owino", "rider_phone": "+254 798 828 983"}], "soc_traj": {"KF-A100": [[0.0, 99.88854114650506], [3.0, 99.1175189457009], [6.0, 98.31684309183468], [9.0, 97.42996604027682], [12.0, 96.46700612902278], [15.0, 95.49977175392064], [18.0, 94.44811516567826], [21.0, 93.39675661379704], [23.5, 92.52034080540126], [26.5, 91.53377046593532], [29.5, 90.5947301309574], [32.5, 89.71217399265731], [35.5, 88.83392533257717], [39.0, 88.087860869694], [42.0, 87.37576025681457], [44.5, 86.85332088154291], [47.5, 86.34382044842278], [50.5, 85.88875532221856], [54.0, 85.3494169096327], [58.0, 84.85609132115131], [61.0, 84.58104783197108], [63.5, 84.21756084259803], [66.5, 83.91067423982125], [70.0, 83.37461756271193], [73.0, 82.84539053535231], [76.5, 82.14251908439692], [79.5, 81.55072627738849], [82.5, 80.73111063279917], [85.5, 79.89302105792014], [88.0, 79.14734476443557], [91.5, 78.10754876481418], [94.5, 77.12725478897464], [97.5, 76.02965133223364], [100.5, 74.91757029407685], [103.5, 73.87460191086616], [107.0, 72.72372411551376], [109.5, 71.90272673748201], [113.5, 70.77577607522375], [116.5, 69.94518211148439], [120.0, 69.16636818264898], [123.0, 68.4766390596142], [126.0, 67.95602937770933], [128.5, 67.50662231710726], [131.5, 66.90440866729408], [134.5, 66.53035415029787], [137.5, 66.0351709953368], [140.5, 65.41348487507011], [143.5, 64.8917764128379], [146.5, 64.26478461007537], [149.5, 63.55042793437272]], "KF-B101": [[0.0, 99.45711378119798], [1.0, 98.78341293618972], [2.5, 96.83552019802856], [3.5, 96.09551070223635], [5.0, 94.8758001142524], [6.0, 93.85293242449968], [7.5, 91.8988974985384], [8.5, 91.05768440697956], [10.0, 89.46589936130023], [11.0, 88.76337836620122], [12.5, 87.04615947560526], [14.0, 84.97780743383204], [15.0, 84.25158462835745], [16.5, 82.76981721893952], [17.5, 82.16467486638207], [19.0, 81.62438728843723], [20.0, 80.44843809861436], [21.5, 78.53922628605254], [22.5, 77.6570597806293], [24.0, 75.89911066127634], [25.5, 73.69379887967655], [26.5, 72.47404870476075], [28.0, 70.41212359355077], [29.0, 69.2220411076912], [30.5, 67.39106524532002], [31.5, 66.10564309788928], [33.0, 65.25735901605272], [34.0, 64.0740044134931], [35.5, 62.37621544551728], [36.5, 60.80218333633061], [38.0, 58.9933130927975], [40.0, 56.72517517779334], [41.5, 54.59030314659706], [43.0, 52.06158735487959], [44.0, 50.30110333794031], [45.5, 48.27043124251507], [46.5, 47.206560248084685], [48.0, 45.05531566829588], [49.0, 43.66221529621087], [50.5, 41.70220379997998], [52.5, 39.41975575050587], [53.5, 38.67328945318833], [55.0, 37.126443586217], [56.0, 35.65135500216626], [57.5, 33.19955634933196], [58.5, 31.334542451211234], [60.0, 28.28537654285786], [61.0, 27.18137609240657], [62.5, 24.724994998058104], [64.0, 21.58943236583254]], "KF-C102": [[0.0, 99.831971732953], [2.5, 99.19275942335584], [6.0, 98.2133243736568], [9.0, 97.34863307432056], [12.0, 96.4650393392956], [15.0, 95.47978056277462], [18.5, 94.24810089682111], [21.0, 93.43086085772111], [24.5, 92.21920243879592], [27.5, 91.17471053503324], [30.5, 90.20941961542704], [33.5, 89.3839435869414], [36.5, 88.64511183501475], [39.0, 88.0266950462817], [42.0, 87.36558784696001], [45.0, 86.78547420573508], [48.0, 86.32862679859556], [51.0, 85.9433387074529], [54.0, 85.52139765184933], [57.0, 85.15441456878636], [60.0, 84.84657522757502], [63.5, 84.39512592495734], [66.5, 83.9920619924068], [69.5, 83.61292121997415], [72.5, 83.15131272714603], [75.0, 82.71820479394658], [78.0, 82.0421504789799], [81.5, 81.14939962438037], [85.0, 80.1976848325817], [88.5, 79.13450710583705], [91.5, 78.09985671053774], [94.0, 77.25319983302714], [97.5, 75.910289578686], [100.5, 74.79413971382503], [104.0, 73.4718092709668], [107.0, 72.43764138790407], [110.0, 71.55251416126299], [112.5, 70.81162307120464], [115.5, 69.96471246789945], [118.5, 69.22881965605539], [121.5, 68.47592489730826], [125.5, 67.72148272748326], [128.5, 67.11278124592226], [131.5, 66.55993614155909], [134.5, 66.03259247154001], [137.5, 65.48254457447297], [140.5, 64.9394615839329], [143.5, 64.39067724759694], [146.5, 63.72662760892657], [149.5, 63.05887059512801]], "KF-D103": [[0.0, 99.89104021887904], [2.5, 99.3180253702749], [5.5, 98.54584645256602], [8.5, 97.77683265201831], [11.5, 96.88270371609036], [14.0, 96.0586345285808], [17.5, 94.9285943882048], [20.5, 93.98485375937584], [23.5, 92.94990993513066], [26.0, 92.1524121825511], [29.0, 91.2118613296873], [32.5, 90.1620899055449], [35.5, 89.3078928673741], [39.0, 88.5734609655613], [41.5, 88.07721438877755], [44.5, 87.44352906790188], [48.5, 86.68665427150299], [51.5, 86.21760300047193], [54.0, 85.93152577167005], [57.0, 85.56324690450587], [60.0, 85.27484688429809], [63.5, 84.92746697880992], [67.0, 84.52055822492208], [69.5, 84.13838588849009], [72.5, 83.65339144476289], [75.5, 83.14373396410765], [78.5, 82.47750425299961], [81.0, 81.90965890897118], [84.0, 81.09783567699883], [87.0, 80.24229094594763], [90.0, 79.29804326107177], [93.0, 78.42091820006273], [95.5, 77.6133058839694], [98.5, 76.44607023878076], [102.0, 75.12608196823814], [106.0, 73.83652558731698], [108.5, 73.1196584099783], [112.0, 72.08662859044759], [115.5, 71.17775184155713], [118.5, 70.39644906243663], [122.0, 69.59697666526034], [124.5, 69.09980339032731], [127.5, 68.52319097705781], [131.0, 67.82210090496446], [134.0, 67.34028854551471], [136.5, 66.92834363097776], [140.5, 66.36380130729033], [143.5, 65.86094143357128], [146.5, 65.28717257775567], [149.5, 64.66714303428614]], "KF-E104": [[0.0, 99.8703286933858], [3.0, 99.21782567123356], [6.0, 98.525831626148], [9.0, 97.66525917962652], [11.5, 96.91409834336947], [14.5, 96.02010837642707], [17.5, 95.0650930480866], [20.0, 94.26332662517989], [23.5, 93.14606562730523], [27.5, 91.9500075297438], [30.0, 91.14928924195264], [33.0, 90.37331748255504], [36.5, 89.49540238875721], [40.0, 88.6667114337672], [42.5, 88.08384722053891], [45.5, 87.51443876428065], [49.5, 86.90503407456485], [52.0, 86.59293407642136], [56.0, 86.02719663041098], [59.5, 85.69777540081134], [62.0, 85.40616469125966], [65.0, 85.02848495867181], [68.0, 84.54562902211562], [71.0, 84.05647031290694], [74.0, 83.55462831688813], [77.0, 83.076966660937], [81.0, 82.15305301669926], [83.5, 81.46864690150693], [86.5, 80.64453514466597], [90.0, 79.52157784533793], [92.5, 78.75915296275627], [96.0, 77.68217481175371], [99.0, 76.65308998175999], [101.5, 75.76231734133182], [104.5, 74.70949240649756], [107.5, 73.75716586268459], [110.0, 73.02764888424889], [113.0, 72.18939060365163], [116.0, 71.38591642898014], [119.0, 70.67858999587418], [121.5, 70.09386126679954], [124.5, 69.57006215427933], [128.0, 68.97875131194967], [131.0, 68.366764038031], [134.0, 67.89611065117427], [137.0, 67.43411528022797], [140.0, 66.96283677200347], [143.5, 66.34587572240184], [146.5, 65.77048173949794], [149.5, 65.12542407475051]], "KF-F105": [[0.0, 99.88731786937616], [2.5, 99.3957302621208], [5.5, 98.72596684100589], [8.5, 97.96703269057438], [11.5, 97.13793830275024], [14.5, 96.27339196732092], [18.0, 95.20181637186192], [21.0, 94.26181839321252], [23.5, 93.48073391670869], [26.5, 92.60357807821312], [30.0, 91.59165565898596], [33.0, 90.8024528883857], [36.0, 90.08506086801296], [39.0, 89.30907943462455], [42.0, 88.63704620508719], [45.0, 88.1784931286602], [48.0, 87.77038403723257], [51.5, 87.29469411440417], [55.0, 86.83340306384297], [58.0, 86.4428156415137], [61.0, 86.11332227687885], [63.5, 85.79460110729423], [66.5, 85.46964651833498], [69.5, 85.09822240546303], [73.0, 84.56216502993931], [76.0, 84.05741249974818], [79.0, 83.38030552246968], [82.0, 82.60669525394178], [85.5, 81.68253451254094], [89.5, 80.52391086448661], [92.5, 79.67559266610786], [95.5, 78.73546781660741], [98.5, 77.78290928870918], [101.5, 76.79465080197872], [104.5, 75.91810300347834], [108.0, 74.90151881871518], [110.5, 74.25974724646713], [113.5, 73.4170547725705], [116.5, 72.71384325024022], [119.5, 72.10145456770394], [122.5, 71.4933534041868], [125.5, 70.9392114803276], [128.0, 70.49794465847647], [131.5, 69.93305321035231], [134.5, 69.56445682369258], [137.5, 69.0064631709878], [140.5, 68.60149684362631], [143.5, 68.0670030053507], [146.5, 67.48608674030292], [149.5, 66.86836054066747]], "KF-G106": [[0.0, 99.68532639647216], [2.5, 99.09517403982656], [5.5, 98.27111008904384], [9.0, 97.19152955368708], [12.0, 96.14435474870731], [15.0, 95.12550935703185], [18.0, 94.05839037762404], [21.5, 92.72936771913383], [25.0, 91.42894529498784], [28.0, 90.40913726996024], [31.0, 89.41053559764688], [34.5, 88.42250411819506], [38.0, 87.65383203384845], [40.5, 87.10161544597533], [43.5, 86.45232310694323], [46.5, 85.97760043118815], [49.5, 85.57023285352943], [52.5, 85.13807617672714], [55.5, 84.67595081798176], [58.5, 84.35035871084683], [62.0, 84.02814659430003], [65.0, 83.67674735823955], [68.0, 83.11855855745227], [71.0, 82.60286104485284], [74.0, 81.98494428471446], [76.5, 81.42210710350697], [80.0, 80.4041549939517], [83.0, 79.60772061638227], [86.0, 78.66222636716553], [89.0, 77.5915594253603], [92.0, 76.59618735937306], [94.5, 75.73349338525698], [97.5, 74.58635815890379], [100.5, 73.47795910046682], [103.5, 72.40623655887079], [106.5, 71.40168674768758], [109.5, 70.42995035650983], [112.5, 69.52119206859875], [115.5, 68.74327527047951], [119.0, 67.8779174623883], [122.0, 67.08803191303036], [125.0, 66.45874210333825], [128.0, 65.89687312340409], [130.5, 65.3332622838977], [133.5, 64.78243314459904], [136.5, 64.34415835403513], [139.5, 63.81388932705856], [142.5, 63.23408895688667], [145.5, 62.54918800961424], [148.5, 61.889079826455685]], "KF-H107": [[0.0, 99.8924989628682], [2.5, 99.3667182949235], [5.5, 98.7299813690336], [8.5, 98.029791090307], [11.5, 97.26836825699742], [14.5, 96.40396146005592], [17.5, 95.55777462043577], [20.5, 94.68441391856013], [23.0, 93.92865460891706], [26.0, 92.9681877515835], [29.5, 91.88353032477794], [32.0, 91.23726654467944], [35.5, 90.32111448342212], [39.0, 89.6372469478832], [42.5, 88.90018088843958], [46.0, 88.34832945387505], [49.0, 87.9558987773986], [52.5, 87.44487768356922], [55.0, 87.22287498955984], [58.0, 86.84679540205696], [61.0, 86.54596950256861], [64.0, 86.20592253009623], [66.5, 85.88351064072017], [69.5, 85.45478271984986], [72.5, 84.91778344631896], [75.5, 84.42330779408809], [79.0, 83.72857866311314], [82.5, 82.8977003365141], [85.5, 82.0670457333496], [88.5, 81.23406325849544], [92.0, 80.1409978583658], [95.0, 79.18339001739497], [98.5, 77.96896115576763], [102.0, 76.82936591790131], [105.0, 75.83583051265134], [108.5, 74.96382082595714], [111.0, 74.25850026296237], [114.0, 73.47988480334307], [117.0, 72.84499277052335], [119.5, 72.31553856279562], [123.0, 71.62072580266403], [126.0, 71.0206701659849], [129.0, 70.58680554941095], [131.5, 70.1471955715425], [135.0, 69.65925748223731], [138.0, 69.23190365489276], [140.5, 68.8760089255803], [143.5, 68.46840066020452], [146.5, 67.91987986158581], [149.5, 67.35710800671403]], "KF-I108": [[0.0, 99.67904038973845], [1.0, 97.9506436732312], [2.0, 97.2881043055722], [3.5, 95.83654939504176], [4.5, 95.0614780540908], [6.0, 93.145214203964], [7.0, 91.66278296591376], [8.5, 90.04871841363727], [9.5, 89.26397435273329], [11.0, 87.98391692541018], [12.5, 85.80034479904766], [14.0, 84.32295852303254], [15.0, 83.05056224683565], [16.5, 81.40200525918846], [18.0, 79.94021554484192], [19.5, 77.73819496092403], [21.0, 75.51918756101853], [22.5, 73.7572907752694], [23.5, 72.67006429212604], [25.5, 70.03271507103852], [27.5, 67.50526004106013], [29.0, 64.87580552548229], [30.0, 63.86391421742553], [31.5, 62.0519210080859], [32.5, 60.66140313760163], [34.0, 59.49147660839942], [35.0, 57.96603665376594], [36.5, 55.87319899940223], [37.5, 54.485925808614944], [39.0, 51.67942704657588], [40.0, 49.86844503382452], [41.5, 46.97130717303614], [42.5, 45.43861562810716], [44.0, 41.786760087905954], [45.0, 39.94329092021832], [47.0, 36.740352608726], [48.0, 34.81292740268432], [49.5, 33.20910732960462], [50.5, 31.93353247772325], [52.0, 29.064996984484644], [53.0, 27.69240795388426], [54.5, 25.12355665519817], [55.5, 23.35108468609629], [57.0, 20.993085282539543], [58.5, 18.90644229484821], [60.0, 15.603615521448342], [61.0, 13.268918761508592], [63.0, 11.17361702640838], [64.0, 9.468321713961585], [65.5, 6.831252138942789]], "KF-J109": [[0.0, 99.7805012810102], [1.0, 98.64871683651732], [2.5, 96.74523788459756], [4.0, 95.23509201396293], [5.0, 94.31452627441588], [6.5, 92.43512218434704], [8.0, 91.74088617552071], [9.5, 89.9081308530686], [10.5, 88.64476048784894], [12.5, 86.96050650554959], [14.0, 86.17030849790825], [15.5, 84.9585071897757], [16.5, 83.59382504562922], [18.0, 82.06941942537465], [19.5, 80.56884068817105], [21.0, 78.82604496326418], [22.5, 77.16655673483527], [24.0, 76.17945294305643], [25.5, 74.06303755360322], [27.0, 71.98021456180716], [28.5, 70.78188797674066], [30.0, 69.11725423883156], [31.5, 66.83121585746585], [32.5, 66.13505979939573], [34.0, 63.12814292502532], [35.5, 61.1868463120659], [37.0, 59.36994969501973], [38.0, 58.16164949742307], [39.5, 55.13827040800046], [41.5, 52.576371283002246], [43.0, 51.138019682728], [44.0, 49.44894647245121], [45.5, 46.700626775054246], [47.0, 44.53271287788691], [48.0, 43.03003964308992], [49.5, 40.31569869295334], [51.0, 37.22109592609402], [52.5, 35.11572398762346], [53.5, 33.34526500700876], [55.0, 31.521966041601758], [56.5, 28.79204491958841], [58.0, 26.69860759187444], [59.0, 25.593513030902912], [60.5, 23.25613543773674], [62.5, 20.890207525182166], [64.0, 19.09428220423332], [65.0, 17.44004686074473], [66.5, 16.13351438556226], [68.0, 14.00403947477387], [69.5, 11.885042761049624]], "KF-K110": [[0.0, 99.90323402387338], [2.5, 99.29928149196162], [5.5, 98.6281607875526], [8.5, 97.81848201606644], [11.5, 97.01922365215812], [14.0, 96.25247485082171], [17.0, 95.38217561796355], [20.0, 94.51152447726088], [23.0, 93.54319022401356], [26.0, 92.57603499088265], [29.5, 91.52913661307066], [32.5, 90.6909183050366], [35.5, 89.89882904154884], [38.5, 89.26138905805499], [41.0, 88.75889587132478], [44.0, 88.20458388419328], [47.0, 87.75035201442023], [50.0, 87.37159366652338], [52.5, 87.02581782163844], [55.5, 86.82715821524717], [58.5, 86.47742682616796], [61.5, 86.12521760852162], [64.5, 85.82952218568948], [67.0, 85.4549687057812], [70.0, 84.95700179958251], [73.0, 84.43236051607452], [76.0, 83.8997492163645], [79.0, 83.22221492287791], [82.5, 82.32525035351448], [85.5, 81.51694734626813], [89.0, 80.45712117894327], [92.0, 79.57768028537295], [94.5, 78.76285563546352], [97.5, 77.76000718832029], [100.5, 76.78427431501315], [103.5, 75.77008830597696], [106.0, 74.94448862780756], [109.0, 74.05672686098852], [113.0, 72.92090179615303], [116.0, 72.1973368750564], [119.0, 71.55644511142799], [123.0, 70.75436324654866], [126.5, 70.07116522636832], [129.5, 69.52792426293423], [133.0, 68.94721061446585], [135.5, 68.62931943354053], [139.0, 68.13341738217049], [143.0, 67.54746763611165], [146.5, 66.8481470445511], [149.5, 66.22817599083923]], "KF-L111": [[0.0, 99.26189830434132], [1.0, 97.77836067005605], [2.0, 96.74675094747386], [3.0, 95.62692092081498], [4.5, 94.05306204934844], [5.5, 92.89840973084536], [6.5, 91.7726854257627], [8.0, 90.15051748232167], [9.0, 88.80845389396057], [10.0, 88.02549887106763], [11.5, 86.36867968806949], [13.0, 83.94923502763353], [14.0, 82.63100527092291], [15.0, 81.4905860168832], [16.5, 80.42853157286162], [17.5, 79.30793005827327], [19.0, 77.69851823209929], [20.0, 76.58760325404755], [21.5, 74.56252732380712], [22.5, 72.98854332937977], [23.5, 71.16356893136395], [26.0, 68.27627060921523], [27.0, 66.15235861554635], [28.5, 64.34325472938654], [29.5, 62.56690387214574], [31.5, 60.03361697918308], [33.0, 57.824179069977774], [34.0, 56.13657472930684], [35.5, 54.84810572678305], [36.5, 53.82493417609405], [37.5, 51.80260619204039], [38.5, 50.06591633415852], [40.0, 48.58003079187448], [41.0, 47.00309951594048], [42.0, 46.024188364541786], [43.5, 43.75504380167593], [44.5, 41.42413282801185], [45.5, 39.41421124561236], [47.0, 37.47452099518597], [48.5, 34.464746689856824], [49.5, 32.65724092421218], [50.5, 31.41070014718386], [52.0, 28.950295922909437], [53.0, 26.63751665821558], [54.0, 25.09340787642377], [55.5, 22.58781587650984], [57.0, 19.90386392014012], [58.0, 17.508391521269992], [59.0, 16.054820594249332], [61.0, 12.897659111740772]]}, "volt_traj": {"KF-A100": [55.94, 55.97, 55.87, 55.82, 55.83, 55.78, 55.64, 55.65, 55.5, 55.37, 55.37, 55.28, 55.13, 55.16, 55.09, 55.0, 55.06, 54.87, 54.97, 54.94, 54.94, 54.96, 54.87, 54.77, 54.79, 54.79, 54.71, 54.71, 54.58, 54.5, 54.49, 54.43, 54.38, 54.3, 54.22, 54.13, 54.04, 53.99, 53.96, 53.9, 53.7, 53.69, 53.7, 53.69, 53.7, 53.62, 53.6, 53.53, 53.51, 53.4], "KF-B101": [53.67, 53.12, 53.01, 55.52, 54.45, 53.47, 52.97, 54.97, 53.55, 52.36, 53.73, 52.08, 52.51, 52.73, 51.8, 51.42, 52.74, 52.56, 51.64, 52.57, 51.16, 52.6, 50.81, 51.79, 50.5, 49.92, 49.48, 51.13, 51.25, 51.23, 49.54, 50.77, 50.29, 50.65, 48.14, 49.76, 50.16, 50.4, 49.08, 48.69, 48.82, 49.35, 49.68, 48.85, 48.48, 46.53, 47.52, 48.23, 45.64, 45.54], "KF-C102": [56.05, 55.96, 55.81, 55.9, 55.75, 55.69, 55.6, 55.57, 55.41, 55.45, 55.29, 55.33, 55.26, 55.13, 55.05, 54.98, 54.98, 54.96, 55.0, 55.0, 54.93, 55.0, 54.85, 54.89, 54.82, 54.81, 54.76, 54.61, 54.62, 54.48, 54.46, 54.39, 54.24, 54.2, 54.17, 54.19, 54.01, 54.06, 53.89, 53.78, 53.87, 53.75, 53.71, 53.7, 53.61, 53.58, 53.64, 53.55, 53.5, 53.51], "KF-D103": [56.02, 55.88, 55.94, 55.88, 55.78, 55.72, 55.71, 55.51, 55.4, 55.43, 55.45, 55.28, 55.14, 55.16, 55.08, 55.05, 55.15, 55.08, 55.03, 54.93, 54.98, 54.86, 54.92, 54.94, 54.82, 54.81, 54.78, 54.63, 54.73, 54.49, 54.5, 54.53, 54.45, 54.4, 54.17, 54.13, 54.14, 54.02, 53.96, 53.91, 53.92, 53.84, 53.8, 53.82, 53.66, 53.65, 53.61, 53.6, 53.61, 53.53], "KF-E104": [55.88, 55.94, 55.91, 55.79, 55.81, 55.75, 55.76, 55.6, 55.46, 55.54, 55.39, 55.31, 55.23, 55.17, 55.25, 55.2, 55.07, 55.02, 55.02, 55.08, 55.02, 54.99, 54.91, 54.95, 54.9, 54.86, 54.74, 54.71, 54.66, 54.62, 54.57, 54.5, 54.46, 54.4, 54.34, 54.25, 54.18, 54.03, 54.07, 53.93, 53.94, 53.91, 53.85, 53.82, 53.74, 53.69, 53.78, 53.62, 53.68, 53.59], "KF-F105": [55.99, 56.03, 55.87, 55.86, 55.72, 55.8, 55.63, 55.57, 55.49, 55.41, 55.42, 55.31, 55.28, 55.2, 55.16, 55.1, 55.1, 55.12, 55.07, 55.01, 54.98, 55.04, 55.03, 54.93, 54.84, 54.91, 54.9, 54.8, 54.8, 54.75, 54.55, 54.49, 54.54, 54.27, 54.36, 54.29, 54.26, 54.28, 54.14, 54.19, 53.99, 53.95, 53.92, 53.92, 53.84, 53.85, 53.73, 53.83, 53.75, 53.66], "KF-G106": [56.0, 55.91, 55.92, 55.8, 55.78, 55.73, 55.65, 55.66, 55.38, 55.42, 55.26, 55.26, 55.22, 55.19, 55.05, 55.04, 55.01, 54.93, 54.9, 54.83, 54.91, 54.89, 54.81, 54.83, 54.75, 54.73, 54.75, 54.57, 54.56, 54.49, 54.45, 54.31, 54.2, 54.11, 54.21, 54.05, 53.91, 53.93, 53.81, 53.74, 53.65, 53.68, 53.68, 53.52, 53.47, 53.53, 53.52, 53.48, 53.45, 53.28], "KF-H107": [55.98, 55.92, 55.88, 55.83, 55.84, 55.74, 55.64, 55.62, 55.55, 55.53, 55.33, 55.39, 55.3, 55.18, 55.29, 55.13, 55.16, 55.14, 55.18, 55.14, 55.09, 55.01, 54.97, 54.97, 54.89, 54.97, 54.89, 54.78, 54.89, 54.71, 54.6, 54.39, 54.46, 54.41, 54.29, 54.33, 54.13, 54.24, 54.08, 54.09, 54.05, 53.94, 53.88, 53.87, 53.88, 53.8, 53.82, 53.82, 53.81, 53.69], "KF-I108": [58.43, 54.46, 58.12, 58.68, 54.08, 57.13, 57.58, 58.42, 59.42, 52.77, 53.39, 57.41, 57.15, 52.09, 57.16, 51.34, 57.99, 51.55, 51.82, 52.48, 50.53, 51.73, 51.26, 58.79, 56.88, 50.96, 56.41, 58.21, 50.28, 57.21, 48.32, 53.3, 49.81, 58.57, 57.51, 58.55, 47.38, 59.6, 46.89, 46.6, 58.47, 57.78, 58.15, 56.81, 56.08, 47.5, 46.97, 57.55, 44.36, 57.79], "KF-J109": [53.92, 54.9, 54.88, 52.85, 55.15, 54.79, 54.15, 52.79, 53.0, 52.58, 51.91, 52.32, 53.95, 51.92, 51.13, 52.61, 52.13, 51.03, 53.12, 50.36, 53.04, 51.06, 52.2, 49.86, 51.89, 51.75, 49.64, 48.92, 49.79, 48.31, 48.58, 50.08, 50.13, 48.27, 50.03, 47.19, 48.15, 46.52, 47.04, 46.75, 46.75, 46.5, 46.82, 47.77, 47.63, 47.68, 46.39, 47.39, 46.32, 44.57], "KF-K110": [55.99, 55.86, 55.87, 55.89, 55.73, 55.77, 55.65, 55.61, 55.51, 55.5, 55.44, 55.47, 55.23, 55.28, 55.16, 55.13, 55.09, 55.14, 54.98, 55.08, 55.02, 55.07, 55.05, 55.05, 54.91, 54.85, 54.76, 54.7, 54.74, 54.6, 54.64, 54.57, 54.48, 54.43, 54.38, 54.24, 54.13, 54.16, 54.04, 53.98, 54.0, 53.98, 53.81, 53.86, 53.81, 53.8, 53.73, 53.76, 53.67, 53.62], "KF-L111": [57.41, 59.32, 52.73, 55.12, 59.38, 52.81, 59.68, 59.55, 58.81, 53.85, 53.35, 52.87, 58.17, 57.63, 59.27, 52.06, 58.41, 52.88, 53.28, 56.63, 57.49, 58.34, 50.32, 59.18, 50.25, 50.59, 50.77, 58.95, 58.29, 50.46, 49.14, 50.41, 49.25, 48.71, 47.64, 47.56, 56.97, 48.71, 47.92, 47.77, 48.24, 57.82, 48.28, 45.76, 46.99, 45.64, 45.98, 46.68, 56.94, 56.42]}}, "roam": {"name": "Roam", "full": "Roam Motors", "accent": "#FF7A45", "real": false, "vehicle_types": ["2W", "3W", "4W"], "units": [{"id": "RM-2W-0001", "vehicle_type": "2W", "zone": "Ngong Rd", "status": "flagged", "soh": 64.3, "drain_rate_hr": 53.8, "ride_duration_min": 75.5, "end_soc": 19.6, "volt_std": 4.83, "volt_mean": 58.6, "soc_mean": 35.0, "temp_max": 27.8, "cur_max": 7.8, "live_soc": 57.9, "volt_nominal": 60, "rider_name": "Atieno Mwangi", "rider_phone": "+254 758 914 787"}, {"id": "RM-2W-0002", "vehicle_type": "2W", "zone": "Nairobi CBD", "status": "normal", "soh": 96.4, "drain_rate_hr": 15.0, "ride_duration_min": 145.7, "end_soc": 54.1, "volt_std": 0.92, "volt_mean": 60, "soc_mean": 69.3, "temp_max": 30.8, "cur_max": 8.4, "live_soc": 40.8, "volt_nominal": 60, "rider_name": "Caroline Njau", "rider_phone": "+254 769 701 551"}, {"id": "RM-2W-0003", "vehicle_type": "2W", "zone": "Rongai", "status": "normal", "soh": 90.0, "drain_rate_hr": 11.2, "ride_duration_min": 159.7, "end_soc": 61.3, "volt_std": 0.88, "volt_mean": 60, "soc_mean": 89.2, "temp_max": 30.6, "cur_max": 10.1, "live_soc": 48.4, "volt_nominal": 60, "rider_name": "Stephen Ali", "rider_phone": "+254 793 533 684"}, {"id": "RM-2W-0004", "vehicle_type": "2W", "zone": "South B", "status": "normal", "soh": 98.0, "drain_rate_hr": 16.9, "ride_duration_min": 154.7, "end_soc": 49.0, "volt_std": 0.54, "volt_mean": 60, "soc_mean": 58.5, "temp_max": 26.6, "cur_max": 8.0, "live_soc": 27.6, "volt_nominal": 60, "rider_name": "Kamau Mburu", "rider_phone": "+254 794 032 867"}, {"id": "RM-2W-0005", "vehicle_type": "2W", "zone": "Ruaka", "status": "normal", "soh": 90.7, "drain_rate_hr": 14.3, "ride_duration_min": 153.5, "end_soc": 63.4, "volt_std": 0.81, "volt_mean": 60, "soc_mean": 77.6, "temp_max": 24.6, "cur_max": 10.5, "live_soc": 38.4, "volt_nominal": 60, "rider_name": "Hassan Barasa", "rider_phone": "+254 705 935 498"}, {"id": "RM-2W-0006", "vehicle_type": "2W", "zone": "Bamburi", "status": "normal", "soh": 95.7, "drain_rate_hr": 16.7, "ride_duration_min": 154.0, "end_soc": 66.5, "volt_std": 0.87, "volt_mean": 60, "soc_mean": 73.9, "temp_max": 26.1, "cur_max": 7.8, "live_soc": 40.1, "volt_nominal": 60, "rider_name": "Esther Mohamed", "rider_phone": "+254 711 342 345"}, {"id": "RM-2W-0007", "vehicle_type": "2W", "zone": "Rongai", "status": "normal", "soh": 96.5, "drain_rate_hr": 12.6, "ride_duration_min": 147.5, "end_soc": 67.5, "volt_std": 0.79, "volt_mean": 60, "soc_mean": 84.3, "temp_max": 25.3, "cur_max": 8.3, "live_soc": 60.4, "volt_nominal": 60, "rider_name": "Vincent Waweru", "rider_phone": "+254 704 740 467"}, {"id": "RM-2W-0008", "vehicle_type": "2W", "zone": "Nyali", "status": "normal", "soh": 91.3, "drain_rate_hr": 22.0, "ride_duration_min": 147.8, "end_soc": 50.0, "volt_std": 0.43, "volt_mean": 60, "soc_mean": 81.7, "temp_max": 25.0, "cur_max": 10.5, "live_soc": 51.7, "volt_nominal": 60, "rider_name": "Barasa Sang", "rider_phone": "+254 741 016 193"}, {"id": "RM-2W-0009", "vehicle_type": "2W", "zone": "Thika Rd", "status": "normal", "soh": 93.9, "drain_rate_hr": 13.0, "ride_duration_min": 149.4, "end_soc": 68.7, "volt_std": 0.81, "volt_mean": 60, "soc_mean": 84.7, "temp_max": 25.0, "cur_max": 11.6, "live_soc": 77.6, "volt_nominal": 60, "rider_name": "Erick Wanjiru", "rider_phone": "+254 743 013 917"}, {"id": "RM-2W-0010", "vehicle_type": "2W", "zone": "Kayole", "status": "normal", "soh": 93.8, "drain_rate_hr": 21.4, "ride_duration_min": 160.7, "end_soc": 53.8, "volt_std": 0.7, "volt_mean": 60, "soc_mean": 85.3, "temp_max": 25.6, "cur_max": 11.8, "live_soc": 42.4, "volt_nominal": 60, "rider_name": "Cherono Hassan", "rider_phone": "+254 758 544 513"}, {"id": "RM-2W-0011", "vehicle_type": "2W", "zone": "Rongai", "status": "normal", "soh": 94.7, "drain_rate_hr": 19.3, "ride_duration_min": 148.6, "end_soc": 48.0, "volt_std": 0.59, "volt_mean": 60, "soc_mean": 84.9, "temp_max": 24.2, "cur_max": 11.8, "live_soc": 82.4, "volt_nominal": 60, "rider_name": "Winnie Kamau", "rider_phone": "+254 724 506 987"}, {"id": "RM-2W-0012", "vehicle_type": "2W", "zone": "South B", "status": "normal", "soh": 95.0, "drain_rate_hr": 10.9, "ride_duration_min": 155.6, "end_soc": 66.0, "volt_std": 0.99, "volt_mean": 60, "soc_mean": 81.8, "temp_max": 28.8, "cur_max": 8.2, "live_soc": 91.0, "volt_nominal": 60, "rider_name": "Hassan Hassan", "rider_phone": "+254 796 495 181"}, {"id": "RM-2W-0013", "vehicle_type": "2W", "zone": "Kasarani", "status": "normal", "soh": 93.4, "drain_rate_hr": 12.5, "ride_duration_min": 148.9, "end_soc": 64.1, "volt_std": 0.52, "volt_mean": 60, "soc_mean": 80.9, "temp_max": 26.8, "cur_max": 12.1, "live_soc": 52.9, "volt_nominal": 60, "rider_name": "Elijah Adhiambo", "rider_phone": "+254 790 387 769"}, {"id": "RM-2W-0014", "vehicle_type": "2W", "zone": "Bamburi", "status": "normal", "soh": 92.5, "drain_rate_hr": 17.1, "ride_duration_min": 138.1, "end_soc": 52.8, "volt_std": 0.44, "volt_mean": 60, "soc_mean": 86.5, "temp_max": 29.7, "cur_max": 8.7, "live_soc": 84.5, "volt_nominal": 60, "rider_name": "Kiprotich Kariuki", "rider_phone": "+254 700 137 467"}, {"id": "RM-2W-0015", "vehicle_type": "2W", "zone": "Thika Rd", "status": "normal", "soh": 94.1, "drain_rate_hr": 16.5, "ride_duration_min": 155.3, "end_soc": 67.4, "volt_std": 0.75, "volt_mean": 60, "soc_mean": 76.6, "temp_max": 26.2, "cur_max": 9.8, "live_soc": 27.1, "volt_nominal": 60, "rider_name": "Grace Otieno", "rider_phone": "+254 722 818 360"}, {"id": "RM-2W-0016", "vehicle_type": "2W", "zone": "Nyali", "status": "normal", "soh": 98.1, "drain_rate_hr": 10.7, "ride_duration_min": 152.9, "end_soc": 62.2, "volt_std": 0.44, "volt_mean": 60, "soc_mean": 65.2, "temp_max": 30.6, "cur_max": 11.3, "live_soc": 34.4, "volt_nominal": 60, "rider_name": "Purity Wekesa", "rider_phone": "+254 769 649 430"}, {"id": "RM-2W-0017", "vehicle_type": "2W", "zone": "Bamburi", "status": "normal", "soh": 93.9, "drain_rate_hr": 20.5, "ride_duration_min": 132.6, "end_soc": 65.8, "volt_std": 0.91, "volt_mean": 60, "soc_mean": 78.9, "temp_max": 24.9, "cur_max": 10.6, "live_soc": 21.1, "volt_nominal": 60, "rider_name": "James Achieng", "rider_phone": "+254 704 522 363"}, {"id": "RM-2W-0018", "vehicle_type": "2W", "zone": "Thika Rd", "status": "normal", "soh": 90.7, "drain_rate_hr": 15.8, "ride_duration_min": 137.5, "end_soc": 56.8, "volt_std": 0.44, "volt_mean": 60, "soc_mean": 65.6, "temp_max": 27.4, "cur_max": 12.1, "live_soc": 78.8, "volt_nominal": 60, "rider_name": "Diana Wanjiru", "rider_phone": "+254 705 443 919"}, {"id": "RM-2W-0019", "vehicle_type": "2W", "zone": "Bamburi", "status": "normal", "soh": 96.7, "drain_rate_hr": 19.4, "ride_duration_min": 153.2, "end_soc": 58.7, "volt_std": 0.51, "volt_mean": 60, "soc_mean": 81.7, "temp_max": 26.0, "cur_max": 7.9, "live_soc": 24.6, "volt_nominal": 60, "rider_name": "James Adhiambo", "rider_phone": "+254 757 075 559"}, {"id": "RM-2W-0020", "vehicle_type": "2W", "zone": "Kayole", "status": "flagged", "soh": 71.4, "drain_rate_hr": 68.7, "ride_duration_min": 81.9, "end_soc": 7.6, "volt_std": 5.07, "volt_mean": 58.6, "soc_mean": 63.2, "temp_max": 25.7, "cur_max": 10.3, "live_soc": 37.6, "volt_nominal": 60, "rider_name": "Sharon Waweru", "rider_phone": "+254 701 330 268"}, {"id": "RM-2W-0021", "vehicle_type": "2W", "zone": "Ngong Rd", "status": "normal", "soh": 95.1, "drain_rate_hr": 10.5, "ride_duration_min": 132.9, "end_soc": 62.5, "volt_std": 0.74, "volt_mean": 60, "soc_mean": 80.9, "temp_max": 26.8, "cur_max": 8.8, "live_soc": 43.6, "volt_nominal": 60, "rider_name": "Cheruiyot Kariuki", "rider_phone": "+254 797 342 424"}, {"id": "RM-2W-0022", "vehicle_type": "2W", "zone": "Ruaka", "status": "normal", "soh": 92.1, "drain_rate_hr": 13.8, "ride_duration_min": 156.3, "end_soc": 49.6, "volt_std": 0.67, "volt_mean": 60, "soc_mean": 52.6, "temp_max": 33.0, "cur_max": 12.1, "live_soc": 36.0, "volt_nominal": 60, "rider_name": "Cherono Otieno", "rider_phone": "+254 711 905 986"}, {"id": "RM-2W-0023", "vehicle_type": "2W", "zone": "Ruaka", "status": "normal", "soh": 89.7, "drain_rate_hr": 12.9, "ride_duration_min": 140.0, "end_soc": 57.6, "volt_std": 0.73, "volt_mean": 60, "soc_mean": 83.8, "temp_max": 26.7, "cur_max": 12.1, "live_soc": 59.7, "volt_nominal": 60, "rider_name": "Kamau Njoroge", "rider_phone": "+254 710 381 684"}, {"id": "RM-2W-0024", "vehicle_type": "2W", "zone": "South B", "status": "warning", "soh": 88.0, "drain_rate_hr": 26.8, "ride_duration_min": 130.6, "end_soc": 40.6, "volt_std": 1.12, "volt_mean": 58.1, "soc_mean": 74.6, "temp_max": 25.9, "cur_max": 9.2, "live_soc": 84.0, "volt_nominal": 60, "rider_name": "Ann Wanjiru", "rider_phone": "+254 703 776 531"}, {"id": "RM-3W-0001", "vehicle_type": "3W", "zone": "Ruaka", "status": "normal", "soh": 97.9, "drain_rate_hr": 11.1, "ride_duration_min": 144.8, "end_soc": 54.1, "volt_std": 0.4, "volt_mean": 72, "soc_mean": 63.5, "temp_max": 30.9, "cur_max": 25.7, "live_soc": 75.6, "volt_nominal": 72, "rider_name": "Barasa Adhiambo", "rider_phone": "+254 725 149 935"}, {"id": "RM-3W-0002", "vehicle_type": "3W", "zone": "Ruaka", "status": "normal", "soh": 90.2, "drain_rate_hr": 21.3, "ride_duration_min": 154.2, "end_soc": 51.3, "volt_std": 0.42, "volt_mean": 72, "soc_mean": 67.9, "temp_max": 27.3, "cur_max": 24.8, "live_soc": 23.1, "volt_nominal": 72, "rider_name": "Caroline Simiyu", "rider_phone": "+254 757 377 129"}, {"id": "RM-3W-0003", "vehicle_type": "3W", "zone": "Kasarani", "status": "normal", "soh": 98.0, "drain_rate_hr": 20.8, "ride_duration_min": 137.4, "end_soc": 53.5, "volt_std": 0.46, "volt_mean": 72, "soc_mean": 68.3, "temp_max": 31.0, "cur_max": 28.4, "live_soc": 66.5, "volt_nominal": 72, "rider_name": "George Omondi", "rider_phone": "+254 795 122 644"}, {"id": "RM-3W-0004", "vehicle_type": "3W", "zone": "Thika Rd", "status": "normal", "soh": 90.7, "drain_rate_hr": 19.6, "ride_duration_min": 136.2, "end_soc": 57.1, "volt_std": 0.51, "volt_mean": 72, "soc_mean": 70.6, "temp_max": 32.3, "cur_max": 27.3, "live_soc": 70.2, "volt_nominal": 72, "rider_name": "Fatuma Yusuf", "rider_phone": "+254 757 442 063"}, {"id": "RM-3W-0005", "vehicle_type": "3W", "zone": "Embakasi", "status": "normal", "soh": 97.3, "drain_rate_hr": 11.3, "ride_duration_min": 160.5, "end_soc": 66.9, "volt_std": 0.53, "volt_mean": 72, "soc_mean": 73.9, "temp_max": 31.3, "cur_max": 23.8, "live_soc": 79.7, "volt_nominal": 72, "rider_name": "Immaculate Kiptoo", "rider_phone": "+254 791 684 021"}, {"id": "RM-3W-0006", "vehicle_type": "3W", "zone": "Ngong Rd", "status": "normal", "soh": 93.2, "drain_rate_hr": 13.3, "ride_duration_min": 132.4, "end_soc": 65.0, "volt_std": 0.61, "volt_mean": 72, "soc_mean": 86.1, "temp_max": 28.6, "cur_max": 26.2, "live_soc": 44.8, "volt_nominal": 72, "rider_name": "Cherono Cheruiyot", "rider_phone": "+254 790 311 439"}, {"id": "RM-3W-0007", "vehicle_type": "3W", "zone": "Nairobi CBD", "status": "flagged", "soh": 80.3, "drain_rate_hr": 51.5, "ride_duration_min": 87.9, "end_soc": 10.1, "volt_std": 2.17, "volt_mean": 69.3, "soc_mean": 58.5, "temp_max": 30.6, "cur_max": 22.2, "live_soc": 58.4, "volt_nominal": 72, "rider_name": "Halima Otieno", "rider_phone": "+254 711 534 332"}, {"id": "RM-3W-0008", "vehicle_type": "3W", "zone": "Rongai", "status": "normal", "soh": 89.5, "drain_rate_hr": 15.2, "ride_duration_min": 148.2, "end_soc": 65.7, "volt_std": 0.81, "volt_mean": 72, "soc_mean": 70.5, "temp_max": 32.5, "cur_max": 26.8, "live_soc": 52.3, "volt_nominal": 72, "rider_name": "Ibrahim Owino", "rider_phone": "+254 794 569 140"}, {"id": "RM-BUS-0001", "vehicle_type": "4W", "zone": "Kayole", "status": "normal", "soh": 96.0, "drain_rate_hr": 11.5, "ride_duration_min": 161.5, "end_soc": 59.2, "volt_std": 0.8, "volt_mean": 384, "soc_mean": 76.3, "temp_max": 26.9, "cur_max": 215.7, "live_soc": 34.4, "volt_nominal": 384, "rider_name": "Chebet Njau", "rider_phone": "+254 706 558 743"}, {"id": "RM-BUS-0002", "vehicle_type": "4W", "zone": "Kayole", "status": "normal", "soh": 98.5, "drain_rate_hr": 17.4, "ride_duration_min": 140.5, "end_soc": 60.1, "volt_std": 0.4, "volt_mean": 384, "soc_mean": 77.4, "temp_max": 26.6, "cur_max": 191.7, "live_soc": 69.1, "volt_nominal": 384, "rider_name": "Wafula Hassan", "rider_phone": "+254 798 348 095"}, {"id": "RM-BUS-0003", "vehicle_type": "4W", "zone": "Kikuyu", "status": "normal", "soh": 94.4, "drain_rate_hr": 19.5, "ride_duration_min": 163.6, "end_soc": 64.2, "volt_std": 0.8, "volt_mean": 384, "soc_mean": 80.2, "temp_max": 26.6, "cur_max": 212.7, "live_soc": 27.0, "volt_nominal": 384, "rider_name": "Njeri Njau", "rider_phone": "+254 721 208 907"}, {"id": "RM-BUS-0004", "vehicle_type": "4W", "zone": "Ngong Rd", "status": "normal", "soh": 91.1, "drain_rate_hr": 10.3, "ride_duration_min": 138.6, "end_soc": 58.5, "volt_std": 0.91, "volt_mean": 384, "soc_mean": 78.3, "temp_max": 24.7, "cur_max": 190.3, "live_soc": 34.6, "volt_nominal": 384, "rider_name": "Atieno Mohamed", "rider_phone": "+254 758 044 960"}, {"id": "RM-BUS-0005", "vehicle_type": "4W", "zone": "Embakasi", "status": "normal", "soh": 90.5, "drain_rate_hr": 18.3, "ride_duration_min": 161.2, "end_soc": 66.9, "volt_std": 0.93, "volt_mean": 384, "soc_mean": 85.5, "temp_max": 31.0, "cur_max": 172.7, "live_soc": 72.2, "volt_nominal": 384, "rider_name": "Kilonzo Wanjiru", "rider_phone": "+254 713 517 204"}, {"id": "RM-BUS-0006", "vehicle_type": "4W", "zone": "Kikuyu", "status": "flagged", "soh": 63.7, "drain_rate_hr": 87.0, "ride_duration_min": 60.1, "end_soc": 22.4, "volt_std": 4.07, "volt_mean": 361.1, "soc_mean": 82.7, "temp_max": 29.4, "cur_max": 238.5, "live_soc": 65.9, "volt_nominal": 384, "rider_name": "Hassan Otieno", "rider_phone": "+254 713 274 578"}]}, "ampersand": {"name": "Ampersand", "full": "Ampersand Energy", "accent": "#4FA8FF", "real": false, "vehicle_types": ["2W"], "units": [{"id": "AMP-0001", "vehicle_type": "2W", "zone": "Embakasi", "status": "normal", "soh": 98.5, "drain_rate_hr": 15.4, "ride_duration_min": 135.6, "end_soc": 67.0, "volt_std": 0.67, "volt_mean": 58, "soc_mean": 73.4, "temp_max": 30.8, "cur_max": 10.8, "live_soc": 78.3, "volt_nominal": 58, "rider_name": "Mercy Wanjiru", "rider_phone": "+254 740 085 349"}, {"id": "AMP-0002", "vehicle_type": "2W", "zone": "Kikuyu", "status": "normal", "soh": 89.8, "drain_rate_hr": 13.4, "ride_duration_min": 139.5, "end_soc": 55.0, "volt_std": 0.72, "volt_mean": 58, "soc_mean": 79.3, "temp_max": 25.2, "cur_max": 8.2, "live_soc": 73.0, "volt_nominal": 58, "rider_name": "Vincent Adhiambo", "rider_phone": "+254 708 951 911"}, {"id": "AMP-0003", "vehicle_type": "2W", "zone": "Westlands", "status": "normal", "soh": 93.9, "drain_rate_hr": 10.7, "ride_duration_min": 159.2, "end_soc": 56.6, "volt_std": 0.86, "volt_mean": 58, "soc_mean": 86.0, "temp_max": 32.5, "cur_max": 7.3, "live_soc": 63.2, "volt_nominal": 58, "rider_name": "Mohamed Adhiambo", "rider_phone": "+254 708 804 923"}, {"id": "AMP-0004", "vehicle_type": "2W", "zone": "Kikuyu", "status": "flagged", "soh": 66.1, "drain_rate_hr": 81.9, "ride_duration_min": 81.9, "end_soc": 25.9, "volt_std": 3.22, "volt_mean": 55.1, "soc_mean": 40.0, "temp_max": 28.9, "cur_max": 9.8, "live_soc": 36.5, "volt_nominal": 58, "rider_name": "Cheruiyot Muriuki", "rider_phone": "+254 758 795 028"}, {"id": "AMP-0005", "vehicle_type": "2W", "zone": "Rongai", "status": "normal", "soh": 96.0, "drain_rate_hr": 19.6, "ride_duration_min": 155.3, "end_soc": 66.5, "volt_std": 0.95, "volt_mean": 58, "soc_mean": 87.8, "temp_max": 32.8, "cur_max": 9.5, "live_soc": 64.4, "volt_nominal": 58, "rider_name": "Lucy Sang", "rider_phone": "+254 793 348 405"}, {"id": "AMP-0006", "vehicle_type": "2W", "zone": "Kayole", "status": "flagged", "soh": 72.8, "drain_rate_hr": 49.2, "ride_duration_min": 60.4, "end_soc": 5.2, "volt_std": 3.09, "volt_mean": 56.3, "soc_mean": 37.3, "temp_max": 26.9, "cur_max": 10.5, "live_soc": 76.4, "volt_nominal": 58, "rider_name": "Mercy Njau", "rider_phone": "+254 708 624 650"}, {"id": "AMP-0007", "vehicle_type": "2W", "zone": "Milimani", "status": "normal", "soh": 93.9, "drain_rate_hr": 19.0, "ride_duration_min": 131.8, "end_soc": 68.9, "volt_std": 0.53, "volt_mean": 58, "soc_mean": 69.7, "temp_max": 24.6, "cur_max": 11.3, "live_soc": 22.3, "volt_nominal": 58, "rider_name": "James Ali", "rider_phone": "+254 793 351 712"}, {"id": "AMP-0008", "vehicle_type": "2W", "zone": "Ngong Rd", "status": "warning", "soh": 82.2, "drain_rate_hr": 24.3, "ride_duration_min": 121.8, "end_soc": 37.6, "volt_std": 1.17, "volt_mean": 55.2, "soc_mean": 69.4, "temp_max": 30.9, "cur_max": 7.9, "live_soc": 76.1, "volt_nominal": 58, "rider_name": "Erick Odhiambo", "rider_phone": "+254 703 369 882"}, {"id": "AMP-0009", "vehicle_type": "2W", "zone": "Westlands", "status": "warning", "soh": 83.5, "drain_rate_hr": 32.4, "ride_duration_min": 132.2, "end_soc": 37.8, "volt_std": 1.73, "volt_mean": 56.0, "soc_mean": 68.7, "temp_max": 32.5, "cur_max": 8.1, "live_soc": 82.3, "volt_nominal": 58, "rider_name": "Kiprotich Mburu", "rider_phone": "+254 768 323 367"}, {"id": "AMP-0010", "vehicle_type": "2W", "zone": "Ngong Rd", "status": "normal", "soh": 97.9, "drain_rate_hr": 17.2, "ride_duration_min": 134.2, "end_soc": 69.6, "volt_std": 0.87, "volt_mean": 58, "soc_mean": 77.2, "temp_max": 27.1, "cur_max": 9.0, "live_soc": 57.9, "volt_nominal": 58, "rider_name": "Faith Cheruiyot", "rider_phone": "+254 741 830 771"}, {"id": "AMP-0011", "vehicle_type": "2W", "zone": "Kasarani", "status": "flagged", "soh": 67.7, "drain_rate_hr": 68.0, "ride_duration_min": 58.8, "end_soc": 12.3, "volt_std": 4.83, "volt_mean": 55.8, "soc_mean": 52.8, "temp_max": 25.4, "cur_max": 8.0, "live_soc": 68.8, "volt_nominal": 58, "rider_name": "Grace Barasa", "rider_phone": "+254 757 825 063"}, {"id": "AMP-0012", "vehicle_type": "2W", "zone": "South B", "status": "normal", "soh": 94.1, "drain_rate_hr": 15.2, "ride_duration_min": 155.6, "end_soc": 53.9, "volt_std": 0.91, "volt_mean": 58, "soc_mean": 85.7, "temp_max": 31.5, "cur_max": 7.6, "live_soc": 38.3, "volt_nominal": 58, "rider_name": "Zainab Kiplagat", "rider_phone": "+254 757 512 271"}, {"id": "AMP-0013", "vehicle_type": "2W", "zone": "Kikuyu", "status": "normal", "soh": 92.5, "drain_rate_hr": 15.9, "ride_duration_min": 141.4, "end_soc": 58.7, "volt_std": 0.61, "volt_mean": 58, "soc_mean": 77.4, "temp_max": 26.3, "cur_max": 8.4, "live_soc": 86.0, "volt_nominal": 58, "rider_name": "Zainab Barasa", "rider_phone": "+254 797 385 377"}, {"id": "AMP-0014", "vehicle_type": "2W", "zone": "Ruaka", "status": "flagged", "soh": 79.8, "drain_rate_hr": 46.5, "ride_duration_min": 74.6, "end_soc": 15.2, "volt_std": 4.38, "volt_mean": 55.2, "soc_mean": 74.5, "temp_max": 29.8, "cur_max": 9.3, "live_soc": 27.0, "volt_nominal": 58, "rider_name": "Kevin Simiyu", "rider_phone": "+254 707 930 271"}, {"id": "AMP-0015", "vehicle_type": "2W", "zone": "Ngong Rd", "status": "normal", "soh": 96.0, "drain_rate_hr": 14.4, "ride_duration_min": 149.4, "end_soc": 55.6, "volt_std": 1.0, "volt_mean": 58, "soc_mean": 71.2, "temp_max": 29.0, "cur_max": 8.7, "live_soc": 43.0, "volt_nominal": 58, "rider_name": "Kilonzo Ali", "rider_phone": "+254 740 056 966"}, {"id": "AMP-0016", "vehicle_type": "2W", "zone": "Ngong Rd", "status": "normal", "soh": 90.3, "drain_rate_hr": 16.4, "ride_duration_min": 156.7, "end_soc": 52.1, "volt_std": 0.53, "volt_mean": 58, "soc_mean": 89.1, "temp_max": 28.4, "cur_max": 10.3, "live_soc": 59.3, "volt_nominal": 58, "rider_name": "Barasa Kamau", "rider_phone": "+254 799 397 305"}, {"id": "AMP-0017", "vehicle_type": "2W", "zone": "Eastleigh", "status": "normal", "soh": 92.1, "drain_rate_hr": 14.3, "ride_duration_min": 140.6, "end_soc": 63.6, "volt_std": 0.48, "volt_mean": 58, "soc_mean": 71.3, "temp_max": 24.4, "cur_max": 7.5, "live_soc": 90.8, "volt_nominal": 58, "rider_name": "Joseph Maina", "rider_phone": "+254 798 783 986"}, {"id": "AMP-0018", "vehicle_type": "2W", "zone": "Kayole", "status": "normal", "soh": 98.2, "drain_rate_hr": 16.9, "ride_duration_min": 146.4, "end_soc": 57.7, "volt_std": 0.51, "volt_mean": 58, "soc_mean": 73.1, "temp_max": 24.5, "cur_max": 11.2, "live_soc": 81.7, "volt_nominal": 58, "rider_name": "Diana Njuguna", "rider_phone": "+254 721 662 456"}, {"id": "AMP-0019", "vehicle_type": "2W", "zone": "Rongai", "status": "normal", "soh": 96.2, "drain_rate_hr": 11.8, "ride_duration_min": 158.4, "end_soc": 68.9, "volt_std": 0.45, "volt_mean": 58, "soc_mean": 77.7, "temp_max": 26.2, "cur_max": 9.6, "live_soc": 64.7, "volt_nominal": 58, "rider_name": "Njeri Cheruiyot", "rider_phone": "+254 798 585 352"}, {"id": "AMP-0020", "vehicle_type": "2W", "zone": "South B", "status": "normal", "soh": 93.7, "drain_rate_hr": 15.3, "ride_duration_min": 160.1, "end_soc": 69.8, "volt_std": 0.58, "volt_mean": 58, "soc_mean": 84.7, "temp_max": 29.6, "cur_max": 9.8, "live_soc": 91.1, "volt_nominal": 58, "rider_name": "Ann Maina", "rider_phone": "+254 794 588 927"}, {"id": "AMP-0021", "vehicle_type": "2W", "zone": "Ngong Rd", "status": "normal", "soh": 89.9, "drain_rate_hr": 12.9, "ride_duration_min": 149.3, "end_soc": 51.4, "volt_std": 0.65, "volt_mean": 58, "soc_mean": 52.7, "temp_max": 30.2, "cur_max": 9.2, "live_soc": 41.6, "volt_nominal": 58, "rider_name": "Njeri Omondi", "rider_phone": "+254 703 186 126"}, {"id": "AMP-0022", "vehicle_type": "2W", "zone": "Eastleigh", "status": "normal", "soh": 96.2, "drain_rate_hr": 21.1, "ride_duration_min": 157.6, "end_soc": 61.8, "volt_std": 0.8, "volt_mean": 58, "soc_mean": 77.2, "temp_max": 32.4, "cur_max": 9.0, "live_soc": 68.6, "volt_nominal": 58, "rider_name": "Peter Rotich", "rider_phone": "+254 793 751 135"}, {"id": "AMP-0023", "vehicle_type": "2W", "zone": "Kondele", "status": "warning", "soh": 81.5, "drain_rate_hr": 36.3, "ride_duration_min": 118.8, "end_soc": 42.0, "volt_std": 1.74, "volt_mean": 55.8, "soc_mean": 61.3, "temp_max": 28.2, "cur_max": 8.5, "live_soc": 40.4, "volt_nominal": 58, "rider_name": "Cheruiyot Adhiambo", "rider_phone": "+254 702 481 554"}, {"id": "AMP-0024", "vehicle_type": "2W", "zone": "Ruaka", "status": "warning", "soh": 81.3, "drain_rate_hr": 29.8, "ride_duration_min": 107.9, "end_soc": 32.3, "volt_std": 1.07, "volt_mean": 54.6, "soc_mean": 87.2, "temp_max": 31.5, "cur_max": 9.7, "live_soc": 95.0, "volt_nominal": 58, "rider_name": "Elijah Njuguna", "rider_phone": "+254 743 912 964"}, {"id": "AMP-0025", "vehicle_type": "2W", "zone": "Kayole", "status": "normal", "soh": 97.0, "drain_rate_hr": 12.1, "ride_duration_min": 148.2, "end_soc": 57.7, "volt_std": 0.57, "volt_mean": 58, "soc_mean": 84.0, "temp_max": 33.0, "cur_max": 9.1, "live_soc": 92.7, "volt_nominal": 58, "rider_name": "Mercy Ali", "rider_phone": "+254 702 474 516"}, {"id": "AMP-0026", "vehicle_type": "2W", "zone": "Kikuyu", "status": "normal", "soh": 96.0, "drain_rate_hr": 20.3, "ride_duration_min": 141.5, "end_soc": 63.3, "volt_std": 0.57, "volt_mean": 58, "soc_mean": 78.0, "temp_max": 32.5, "cur_max": 10.7, "live_soc": 54.1, "volt_nominal": 58, "rider_name": "Collins Simiyu", "rider_phone": "+254 799 922 014"}, {"id": "AMP-0027", "vehicle_type": "2W", "zone": "Kasarani", "status": "warning", "soh": 87.2, "drain_rate_hr": 37.6, "ride_duration_min": 128.0, "end_soc": 28.0, "volt_std": 1.7, "volt_mean": 55.8, "soc_mean": 66.6, "temp_max": 24.5, "cur_max": 9.4, "live_soc": 57.4, "volt_nominal": 58, "rider_name": "Atieno Gitau", "rider_phone": "+254 720 704 909"}, {"id": "AMP-0028", "vehicle_type": "2W", "zone": "Kikuyu", "status": "normal", "soh": 94.8, "drain_rate_hr": 21.1, "ride_duration_min": 145.3, "end_soc": 63.4, "volt_std": 0.47, "volt_mean": 58, "soc_mean": 69.8, "temp_max": 32.8, "cur_max": 9.8, "live_soc": 31.9, "volt_nominal": 58, "rider_name": "Kevin Mohamed", "rider_phone": "+254 724 172 426"}, {"id": "AMP-0029", "vehicle_type": "2W", "zone": "Ruaka", "status": "flagged", "soh": 67.4, "drain_rate_hr": 53.9, "ride_duration_min": 81.3, "end_soc": 6.6, "volt_std": 5.02, "volt_mean": 55.3, "soc_mean": 30.9, "temp_max": 25.4, "cur_max": 11.2, "live_soc": 72.9, "volt_nominal": 58, "rider_name": "Cherono Rotich", "rider_phone": "+254 702 621 013"}, {"id": "AMP-0030", "vehicle_type": "2W", "zone": "Rongai", "status": "normal", "soh": 91.6, "drain_rate_hr": 16.6, "ride_duration_min": 143.4, "end_soc": 68.3, "volt_std": 0.7, "volt_mean": 58, "soc_mean": 74.3, "temp_max": 31.9, "cur_max": 10.9, "live_soc": 79.3, "volt_nominal": 58, "rider_name": "Mutua Wafula", "rider_phone": "+254 713 047 275"}]}, "basigo": {"name": "BasiGo", "full": "BasiGo", "accent": "#B388FF", "real": false, "vehicle_types": ["4W"], "units": [{"id": "BG-BUS-0001", "vehicle_type": "4W", "zone": "Nyali", "status": "normal", "soh": 91.8, "drain_rate_hr": 10.0, "ride_duration_min": 155.4, "end_soc": 66.4, "volt_std": 0.75, "volt_mean": 396, "soc_mean": 76.9, "temp_max": 29.9, "cur_max": 269.4, "live_soc": 56.3, "volt_nominal": 396, "rider_name": "Fredrick Wafula", "rider_phone": "+254 795 859 198"}, {"id": "BG-BUS-0002", "vehicle_type": "4W", "zone": "Kayole", "status": "normal", "soh": 93.8, "drain_rate_hr": 13.9, "ride_duration_min": 136.6, "end_soc": 63.3, "volt_std": 0.74, "volt_mean": 396, "soc_mean": 64.5, "temp_max": 26.1, "cur_max": 259.9, "live_soc": 75.9, "volt_nominal": 396, "rider_name": "Achieng Muriuki", "rider_phone": "+254 791 229 289"}, {"id": "BG-BUS-0003", "vehicle_type": "4W", "zone": "Mombasa Island", "status": "normal", "soh": 97.6, "drain_rate_hr": 21.8, "ride_duration_min": 147.3, "end_soc": 48.8, "volt_std": 0.7, "volt_mean": 396, "soc_mean": 84.8, "temp_max": 29.3, "cur_max": 269.8, "live_soc": 53.0, "volt_nominal": 396, "rider_name": "Fredrick Wanjiru", "rider_phone": "+254 706 453 627"}, {"id": "BG-BUS-0004", "vehicle_type": "4W", "zone": "Bamburi", "status": "flagged", "soh": 61.3, "drain_rate_hr": 88.2, "ride_duration_min": 88.3, "end_soc": 5.7, "volt_std": 4.46, "volt_mean": 383.9, "soc_mean": 12.5, "temp_max": 29.6, "cur_max": 220.2, "live_soc": 44.6, "volt_nominal": 396, "rider_name": "George Korir", "rider_phone": "+254 723 826 199"}, {"id": "BG-BUS-0005", "vehicle_type": "4W", "zone": "Mombasa Island", "status": "normal", "soh": 98.3, "drain_rate_hr": 15.9, "ride_duration_min": 148.9, "end_soc": 61.6, "volt_std": 0.54, "volt_mean": 396, "soc_mean": 68.1, "temp_max": 30.2, "cur_max": 208.7, "live_soc": 26.8, "volt_nominal": 396, "rider_name": "Fredrick Njoroge", "rider_phone": "+254 758 416 816"}, {"id": "BG-BUS-0006", "vehicle_type": "4W", "zone": "Ngong Rd", "status": "normal", "soh": 90.1, "drain_rate_hr": 12.0, "ride_duration_min": 140.5, "end_soc": 48.6, "volt_std": 0.59, "volt_mean": 396, "soc_mean": 66.4, "temp_max": 24.5, "cur_max": 216.1, "live_soc": 38.3, "volt_nominal": 396, "rider_name": "Halima Cheruiyot", "rider_phone": "+254 707 061 583"}, {"id": "BG-BUS-0007", "vehicle_type": "4W", "zone": "Nyali", "status": "normal", "soh": 90.8, "drain_rate_hr": 10.9, "ride_duration_min": 160.5, "end_soc": 61.6, "volt_std": 0.54, "volt_mean": 396, "soc_mean": 74.7, "temp_max": 32.2, "cur_max": 193.5, "live_soc": 39.0, "volt_nominal": 396, "rider_name": "Otieno Rotich", "rider_phone": "+254 795 365 157"}, {"id": "BG-BUS-0008", "vehicle_type": "4W", "zone": "Ruaka", "status": "normal", "soh": 93.9, "drain_rate_hr": 13.5, "ride_duration_min": 149.1, "end_soc": 49.6, "volt_std": 0.97, "volt_mean": 396, "soc_mean": 88.5, "temp_max": 32.9, "cur_max": 209.9, "live_soc": 71.8, "volt_nominal": 396, "rider_name": "Mutua Kiptoo", "rider_phone": "+254 713 951 216"}, {"id": "BG-BUS-0009", "vehicle_type": "4W", "zone": "Bamburi", "status": "normal", "soh": 93.0, "drain_rate_hr": 15.8, "ride_duration_min": 138.3, "end_soc": 60.6, "volt_std": 0.74, "volt_mean": 396, "soc_mean": 89.4, "temp_max": 32.9, "cur_max": 209.5, "live_soc": 69.4, "volt_nominal": 396, "rider_name": "Ann Kariuki", "rider_phone": "+254 721 931 213"}, {"id": "BG-BUS-0010", "vehicle_type": "4W", "zone": "Ruaka", "status": "flagged", "soh": 77.9, "drain_rate_hr": 83.3, "ride_duration_min": 88.5, "end_soc": 24.9, "volt_std": 4.33, "volt_mean": 374.9, "soc_mean": 39.9, "temp_max": 32.1, "cur_max": 260.0, "live_soc": 80.1, "volt_nominal": 396, "rider_name": "Kevin Waweru", "rider_phone": "+254 701 011 422"}, {"id": "BG-BUS-0011", "vehicle_type": "4W", "zone": "Kikuyu", "status": "normal", "soh": 96.1, "drain_rate_hr": 18.7, "ride_duration_min": 153.1, "end_soc": 66.4, "volt_std": 0.78, "volt_mean": 396, "soc_mean": 73.7, "temp_max": 32.1, "cur_max": 246.4, "live_soc": 53.1, "volt_nominal": 396, "rider_name": "Caroline Njuguna", "rider_phone": "+254 797 030 042"}, {"id": "BG-BUS-0012", "vehicle_type": "4W", "zone": "Embakasi", "status": "warning", "soh": 83.4, "drain_rate_hr": 35.5, "ride_duration_min": 102.0, "end_soc": 30.2, "volt_std": 1.43, "volt_mean": 372.7, "soc_mean": 79.9, "temp_max": 28.8, "cur_max": 274.4, "live_soc": 39.3, "volt_nominal": 396, "rider_name": "Ann Rotich", "rider_phone": "+254 724 949 190"}, {"id": "BG-BUS-0013", "vehicle_type": "4W", "zone": "Likoni", "status": "normal", "soh": 98.1, "drain_rate_hr": 19.7, "ride_duration_min": 146.4, "end_soc": 49.7, "volt_std": 0.85, "volt_mean": 396, "soc_mean": 76.9, "temp_max": 26.0, "cur_max": 249.5, "live_soc": 49.8, "volt_nominal": 396, "rider_name": "Achieng Odhiambo", "rider_phone": "+254 724 687 658"}, {"id": "BG-BUS-0014", "vehicle_type": "4W", "zone": "Embakasi", "status": "flagged", "soh": 67.1, "drain_rate_hr": 56.0, "ride_duration_min": 41.8, "end_soc": 12.5, "volt_std": 4.35, "volt_mean": 383.9, "soc_mean": 41.3, "temp_max": 27.4, "cur_max": 245.5, "live_soc": 70.6, "volt_nominal": 396, "rider_name": "Yusuf Njuguna", "rider_phone": "+254 714 527 026"}, {"id": "BG-BUS-0015", "vehicle_type": "4W", "zone": "Likoni", "status": "flagged", "soh": 78.3, "drain_rate_hr": 71.8, "ride_duration_min": 85.3, "end_soc": 9.1, "volt_std": 2.01, "volt_mean": 375.0, "soc_mean": 42.1, "temp_max": 32.2, "cur_max": 210.2, "live_soc": 30.5, "volt_nominal": 396, "rider_name": "Immaculate Mburu", "rider_phone": "+254 710 477 230"}]}};
+
+const COMPANY_META = {
+  kofa:      {label:'KOFA',      icon:'🔋', desc:'Motorcycle battery-swap network — Nairobi. Live sample pulled from real Kore2 fleet telemetry (12 units, 8,640 readings).'},
+  roam:      {label:'Roam',      icon:'🏍️', desc:'Motorcycles, tuktuks and electric buses — assembled and swapped across Nairobi and Mombasa.'},
+  ampersand: {label:'Ampersand', icon:'⚡', desc:'High-frequency motorcycle battery swapping — Nairobi and Kisumu corridors.'},
+  basigo:    {label:'BasiGo',    icon:'🚌', desc:'Electric bus fleet — high-voltage battery packs on Nairobi commuter routes.'},
+};
+
+let activeCompany = 'kofa';
+let selectedId = null;
+let currentRole = 'IT';
+let currentSev = 'high';
+let selectedSignalType = null;
+let rackFilter = 'all';        // all | normal | warning | flagged
+let rackVtFilter = 'all';      // all | 2W | 3W | 4W
+let rackSearch = '';
+
+// per-company mutable state
+const state = {};
+Object.keys(COMPANIES).forEach(k=>{
+  state[k] = {
+    incidents: [],
+    incidentSeq: 1,
+    signals: {},     // battery id -> [{type, ts, severity}]
+    logLines: [],     // monitor log
+  };
+  COMPANIES[k].units.forEach(u=>{ u.baseSoc = u.live_soc; });
+});
+
+/* ================= Helpers ================= */
+function fmt(n, suf){ return (n===null||n===undefined) ? '—' : n + (suf||''); }
+function timeAgo(ts){
+  const s = Math.floor((Date.now()-ts)/1000);
+  if(s<5) return 'just now';
+  if(s<60) return s+'s ago';
+  const m = Math.floor(s/60);
+  if(m<60) return m+'m ago';
+  return Math.floor(m/60)+'h ago';
+}
+function nowClock(){
+  const d = new Date();
+  return d.toTimeString().slice(0,8);
+}
+function shortTs(ts){
+  return new Date(ts).toTimeString().slice(0,8);
+}
+function initials(name){
+  return name.split(' ').map(p=>p[0]).join('').slice(0,2).toUpperCase();
+}
+function curCompany(){ return COMPANIES[activeCompany]; }
+function curState(){ return state[activeCompany]; }
+function openIncidentsFor(bid){
+  return curState().incidents.filter(i=>i.battery===bid && i.status!=='resolved');
+}
+function activeSignalsFor(bid){
+  return (curState().signals[bid]||[]).slice(-4);
+}
+
+/* ================= Tabs ================= */
+function renderTabs(){
+  const tabs = document.getElementById('tabs');
+  tabs.innerHTML = '';
+  Object.keys(COMPANIES).forEach(key=>{
+    const c = COMPANIES[key];
+    const meta = COMPANY_META[key];
+    const flaggedCount = c.units.filter(u=>u.status==='flagged').length;
+    const btn = document.createElement('button');
+    btn.className = 'tab'+(key===activeCompany?' active':'');
+    btn.innerHTML = `<span class="swatch" style="background:${c.accent}"></span>${meta.icon} ${c.name} <span class="vt mono">${c.units.length}u</span>${flaggedCount?`<span class="badge">${flaggedCount}</span>`:''}`;
+    btn.addEventListener('click', ()=>{ switchCompany(key); });
+    tabs.appendChild(btn);
+  });
+}
+function switchCompany(key){
+  activeCompany = key;
+  const c = curCompany();
+  document.documentElement.style.setProperty('--accent', c.accent);
+  document.documentElement.style.setProperty('--accent-dim', c.accent+'55');
+  rackFilter='all'; rackVtFilter='all'; rackSearch=''; riderSearch='';
+  const rsb = document.getElementById('rider-search-box'); if(rsb) rsb.value='';
+  selectedId = c.units.find(u=>u.status==='flagged')?.id || c.units[0].id;
+  selectedSignalType = null;
+  renderAll();
+}
+
+/* ================= Page head ================= */
+function renderPageHead(){
+  const c = curCompany(); const meta = COMPANY_META[activeCompany];
+  document.getElementById('ph-title').textContent = `${meta.icon} ${c.full}`;
+  document.getElementById('ph-desc').textContent = meta.desc;
+  document.getElementById('ph-flag').innerHTML = c.real
+    ? '<span class="real-flag">● Real telemetry sample</span>'
+    : '<span class="demo-flag">● Simulated demo data — for illustration</span>';
+  document.getElementById('foot-left').textContent = `Showing ${c.name} · ${c.units.length} units · ${c.vehicle_types.join(' / ')}`;
+}
+
+/* ================= Filters ================= */
+function renderFilters(){
+  const c = curCompany();
+  const wrap = document.getElementById('filters');
+  const statuses = ['all','normal','warning','flagged'];
+  let html = statuses.map(s=>`<button class="filter-btn ${rackFilter===s?'active':''}" data-kind="status" data-val="${s}">${s==='all'?'All units':s.charAt(0).toUpperCase()+s.slice(1)}</button>`).join('');
+  if(c.vehicle_types.length>1){
+    html += `<button class="filter-btn ${rackVtFilter==='all'?'active':''}" data-kind="vt" data-val="all">All types</button>`;
+    html += c.vehicle_types.map(vt=>`<button class="filter-btn ${rackVtFilter===vt?'active':''}" data-kind="vt" data-val="${vt}">${vt}</button>`).join('');
+  }
+  html += `<input class="search-box" id="search-box" placeholder="Search unit ID…" value="${rackSearch}">`;
+  wrap.innerHTML = html;
+  wrap.querySelectorAll('.filter-btn').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      if(b.dataset.kind==='status') rackFilter = b.dataset.val;
+      else rackVtFilter = b.dataset.val;
+      renderFilters(); renderRack();
+    });
+  });
+  document.getElementById('search-box').addEventListener('input', (e)=>{
+    rackSearch = e.target.value.toUpperCase();
+    renderRack();
+  });
+}
+
+/* ================= Rack ================= */
+function filteredUnits(){
+  const c = curCompany();
+  return c.units.filter(u=>{
+    if(rackFilter!=='all' && u.status!==rackFilter) return false;
+    if(rackVtFilter!=='all' && u.vehicle_type!==rackVtFilter) return false;
+    if(rackSearch && !u.id.includes(rackSearch)) return false;
+    return true;
+  });
+}
+function renderRack(){
+  const rack = document.getElementById('rack');
+  const units = filteredUnits();
+  rack.innerHTML = '';
+  if(units.length===0){
+    rack.innerHTML = '<div class="empty-feed" style="grid-column:1/-1;">No units match this filter.</div>';
+    return;
+  }
+  units.forEach(b=>{
+    const hasOpen = openIncidentsFor(b.id).length>0;
+    const cell = document.createElement('div');
+    cell.className = 'cell status-'+b.status + (b.id===selectedId ? ' selected':'');
+    cell.tabIndex = 0; cell.setAttribute('role','button');
+    cell.innerHTML = `
+      ${b.status==='flagged' ? '<div class="flag-badge">FLAG</div>' : ''}
+      ${hasOpen ? '<div class="report-badge"><svg viewBox="0 0 24 24"><path d="M12 2 2 21h20L12 2z"/></svg></div>' : ''}
+      <div class="id">${b.id}</div>
+      <div class="vt-tag">${b.vehicle_type} · ${b.zone.split(' ')[0]}</div>
+      <div class="battery-icon">
+        <div class="nub"></div>
+        <div class="body"><div class="fill" style="height:${Math.max(4,b.live_soc)}%"></div></div>
+      </div>
+      <div class="soh">${b.soh}%</div>
+    `;
+    cell.addEventListener('click', ()=>{ selectedId=b.id; renderDetail(); renderRackSelectionOnly(); renderBatterySelect(); renderSignalPicker(); });
+    rack.appendChild(cell);
+  });
+}
+function renderRackSelectionOnly(){
+  document.querySelectorAll('.rack .cell').forEach(el=>{
+    const id = el.querySelector('.id').textContent;
+    el.classList.toggle('selected', id===selectedId);
+  });
+}
+
+/* ================= Charts ================= */
+function lineChart(points, opts){
+  const w=280, h=100, pad=8;
+  if(!points || points.length<2) return `<svg viewBox="0 0 ${w} ${h}"><text x="10" y="30" fill="#5C7284" font-size="11">Insufficient data</text></svg>`;
+  const xs = points.map(p=>p[0]), ys = points.map(p=>p[1]);
+  const xmin=Math.min(...xs), xmax=Math.max(...xs);
+  const ymin=Math.min(...ys), ymax=Math.max(...ys);
+  const xr=(xmax-xmin)||1, yr=(ymax-ymin)||1;
+  const sx = x => pad + (x-xmin)/xr*(w-2*pad);
+  const sy = y => (h-pad) - (y-ymin)/yr*(h-2*pad);
+  const d = points.map((p,i)=> (i===0?'M':'L')+sx(p[0]).toFixed(1)+','+sy(p[1]).toFixed(1)).join(' ');
+  const areaD = d + ` L${sx(points[points.length-1][0]).toFixed(1)},${h-pad} L${sx(points[0][0]).toFixed(1)},${h-pad} Z`;
+  const color = opts.color;
+  const gid = 'g'+Math.random().toString(36).slice(2,8);
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+    <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="${color}" stop-opacity="0.35"/><stop offset="100%" stop-color="${color}" stop-opacity="0"/>
+    </linearGradient></defs>
+    <line x1="${pad}" y1="${h-pad}" x2="${w-pad}" y2="${h-pad}" stroke="#232E3A" stroke-width="1"/>
+    <path d="${areaD}" fill="url(#${gid})" stroke="none"/>
+    <path d="${d}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+}
+// deterministic pseudo-random trace generator for companies without precomputed traces
+function seededRand(seed){ let s = seed%2147483647; if(s<=0) s+=2147483646;
+  return function(){ s = s*16807 % 2147483647; return (s-1)/2147483646; }; }
+function hashStr(str){ let h=0; for(let i=0;i<str.length;i++){ h = (h*31+str.charCodeAt(i))|0; } return Math.abs(h); }
+function synthSocTrace(unit){
+  const rnd = seededRand(hashStr(unit.id)+1);
+  const n = 40; const pts = [];
+  let soc = Math.min(96, unit.soc_mean + 15);
+  const perStep = (unit.drain_rate_hr/60)*3.5; // ~3.5 min steps
+  for(let i=0;i<n;i++){
+    soc -= perStep*(0.7+rnd()*0.6);
+    pts.push([i*3.5, Math.max(2, +soc.toFixed(1))]);
+  }
+  return pts;
+}
+function synthVoltTrace(unit){
+  const rnd = seededRand(hashStr(unit.id)+2);
+  const n = 40; const pts = [];
+  for(let i=0;i<n;i++){
+    const v = unit.volt_mean + (rnd()-0.5)*2*unit.volt_std;
+    pts.push([i, +v.toFixed(2)]);
+  }
+  return pts;
+}
+
+/* ================= Detail panel ================= */
+function renderDetail(){
+  const c = curCompany();
+  const b = c.units.find(x=>x.id===selectedId) || c.units[0];
+  selectedId = b.id;
+  const panel = document.getElementById('detail-panel');
+  const colorMap = {normal:'#35D68A', warning:'#F5B942', flagged:'#FF5C4D'};
+  const color = colorMap[b.status];
+
+  let soc, volt;
+  if(c.soc_traj && c.soc_traj[b.id]){
+    soc = c.soc_traj[b.id]; volt = (c.volt_traj[b.id]||[]).map((v,i)=>[i,v]);
+  } else {
+    soc = synthSocTrace(b); volt = synthVoltTrace(b);
+  }
+
+  const sigs = activeSignalsFor(b.id);
+  const sigHtml = sigs.length
+    ? sigs.map(s=>`<span class="sig-chip">${s.type}<span class="t">${shortTs(s.ts)}</span></span>`).join('')
+    : '<span class="no-sig">No live anomaly signals on this unit right now.</span>';
+
+  panel.innerHTML = `
+    <div class="detail-top">
+      <div>
+        <h4>${b.id}</h4>
+        <div class="subline">${b.vehicle_type} · ${b.zone} · ${c.name}</div>
+        <span class="status-pill ${b.status}" style="margin-top:8px;">${b.status}</span>
+      </div>
+      <div class="live-soc-badge">
+        <div>
+          <div class="v" id="live-soc-val" style="color:${color}">${b.live_soc.toFixed(1)}%</div>
+          <div class="l">Live SOC</div>
+        </div>
+      </div>
+    </div>
+    <div class="rider-bound-card">
+      <div class="rider-avatar">${initials(b.rider_name)}</div>
+      <div>
+        <div class="rl">Bound rider</div>
+        <div class="rn">${b.rider_name}</div>
+        <div class="rp">${b.rider_phone}</div>
+      </div>
+    </div>
+    <div class="metrics-grid">
+      <div class="metric ${b.status==='flagged'?'bad':b.status==='warning'?'warn':''}"><div class="v">${fmt(b.soh,'%')}</div><div class="l">State of health</div></div>
+      <div class="metric ${b.drain_rate_hr>40?'bad':b.drain_rate_hr>22?'warn':''}"><div class="v">${fmt(b.drain_rate_hr,'%/hr')}</div><div class="l">Drain rate riding</div></div>
+      <div class="metric ${b.ride_duration_min<100?'bad':''}"><div class="v">${fmt(b.ride_duration_min,' min')}</div><div class="l">Ride before stop</div></div>
+      <div class="metric ${b.volt_std>1.5?'bad':b.volt_std>1?'warn':''}"><div class="v">${fmt(b.volt_std,'V')}</div><div class="l">Voltage std dev</div></div>
+      <div class="metric"><div class="v">${fmt(b.volt_mean,'V')}</div><div class="l">Mean voltage</div></div>
+      <div class="metric"><div class="v">${fmt(b.temp_max,'°C')}</div><div class="l">Max ambient temp</div></div>
+      <div class="metric"><div class="v">${fmt(b.cur_max,'A')}</div><div class="l">Peak current</div></div>
+      <div class="metric"><div class="v">${fmt(b.end_soc,'%')}</div><div class="l">SOC at last stop</div></div>
+    </div>
+    <div class="charts-row">
+      <div class="chart-box"><div class="ct"><span>State of charge while riding</span><span class="mono">% vs. min</span></div>${lineChart(soc,{color})}</div>
+      <div class="chart-box"><div class="ct"><span>Voltage while riding</span><span class="mono">V, sampled</span></div>${lineChart(volt,{color:'#D4FF3D'})}</div>
+    </div>
+    <div class="signals-box">
+      <div class="ct">Live anomaly signals — this unit</div>
+      ${sigHtml}
+    </div>
+  `;
+}
+
+/* ================= Fleet bar chart ================= */
+function renderBars(){
+  const c = curCompany();
+  const wrap = document.getElementById('bars');
+  const sorted = [...c.units].sort((a,b)=>(b.drain_rate_hr||0)-(a.drain_rate_hr||0)).slice(0,14);
+  document.getElementById('bars-hint').textContent = `Top ${sorted.length} of ${c.units.length} units by drain rate — % SOC lost per hour while riding`;
+  const max = Math.max(...sorted.map(b=>b.drain_rate_hr||0));
+  wrap.innerHTML = '';
+  sorted.forEach(b=>{
+    const pct = Math.max(4, (b.drain_rate_hr||0)/max*100);
+    const col = document.createElement('div');
+    col.className = 'bar-col status-'+b.status;
+    col.innerHTML = `<div class="bv">${fmt(b.drain_rate_hr)}</div><div class="bar" style="height:${pct}%"></div><div class="bl">${b.id.split('-').slice(1).join('')}</div>`;
+    col.title = b.id+': '+b.drain_rate_hr+'%/hr';
+    col.addEventListener('click', ()=>{ selectedId=b.id; renderDetail(); renderRackSelectionOnly(); renderBatterySelect(); renderSignalPicker(); });
+    wrap.appendChild(col);
+  });
+}
+
+/* ================= Stats ================= */
+function renderStats(){
+  const c = curCompany();
+  document.getElementById('stat-total').textContent = c.units.length;
+  document.getElementById('stat-flagged').textContent = c.units.filter(u=>u.status==='flagged').length;
+  document.getElementById('stat-open').textContent = curState().incidents.filter(i=>i.status!=='resolved').length;
+  const avgSoh = c.units.reduce((a,b)=>a+b.soh,0)/c.units.length;
+  document.getElementById('stat-soh').textContent = avgSoh.toFixed(1)+'%';
+}
+
+/* ================= Report form ================= */
+function renderBatterySelect(){
+  const c = curCompany();
+  const sel = document.getElementById('f-battery');
+  sel.innerHTML = c.units.map(b=>`<option value="${b.id}" ${b.id===selectedId?'selected':''}>${b.id} — ${b.status!=='normal'?b.status+', ':''}${b.soh}% SOH</option>`).join('');
+}
+function renderRoleContext(){
+  const box = document.getElementById('role-context');
+  const btn = document.getElementById('submit-btn');
+  if(currentRole==='IT'){
+    box.innerHTML = '<b style="color:var(--focus)">IT view —</b> confirm the telemetry fault and push a swap-now push notification straight to the rider holding this unit.';
+    btn.className = 'submit-btn it-mode';
+    btn.textContent = '⚡ Send swap-now alert to rider';
+  } else {
+    box.innerHTML = '<b style="color:var(--accent)">Customer Service view —</b> log what the rider reported, or follow up on a unit IT already flagged to confirm the swap happened.';
+    btn.className = 'submit-btn cs-mode';
+    btn.textContent = '📋 Log report & follow up';
+  }
+}
+function renderSignalPicker(){
+  const picker = document.getElementById('sig-picker');
+  const sigs = activeSignalsFor(selectedId);
+  const manual = ['Rider-reported rapid drain','Rider-reported shutdown','Not holding charge at station','Physical / thermal damage','Other'];
+  let html = '';
+  sigs.forEach(s=>{
+    html += `<button type="button" class="sig-pick flagged-live ${selectedSignalType===s.type?'active':''}" data-sig="${s.type}">⚠ ${s.type}</button>`;
+  });
+  manual.forEach(m=>{
+    html += `<button type="button" class="sig-pick ${selectedSignalType===m?'active':''}" data-sig="${m}">${m}</button>`;
+  });
+  picker.innerHTML = html;
+  if(!selectedSignalType){ selectedSignalType = sigs.length ? sigs[0].type : manual[0]; }
+  picker.querySelectorAll('.sig-pick').forEach(el=>{
+    el.classList.toggle('active', el.dataset.sig===selectedSignalType);
+    el.addEventListener('click', ()=>{ selectedSignalType = el.dataset.sig; renderSignalPicker(); });
+  });
+}
+
+document.getElementById('role-toggle').addEventListener('click', (e)=>{
+  const btn = e.target.closest('.role-btn'); if(!btn) return;
+  currentRole = btn.dataset.role;
+  document.querySelectorAll('.role-btn').forEach(b=>b.classList.toggle('active', b===btn));
+  renderRoleContext();
+});
+document.getElementById('sev-row').addEventListener('click', (e)=>{
+  const btn = e.target.closest('.sev-btn'); if(!btn) return;
+  currentSev = btn.dataset.sev;
+  document.querySelectorAll('.sev-btn').forEach(b=>b.classList.toggle('active', b===btn));
+});
+document.getElementById('f-battery').addEventListener('change', (e)=>{
+  selectedId = e.target.value; selectedSignalType=null;
+  renderDetail(); renderRackSelectionOnly(); renderSignalPicker();
+});
+
+document.getElementById('submit-btn').addEventListener('click', ()=>{
+  const c = curCompany();
+  const battery = document.getElementById('f-battery').value;
+  const unit = c.units.find(u=>u.id===battery);
+  const desc = document.getElementById('f-desc').value.trim();
+  const st = curState();
+  const incident = {
+    seq: st.incidentSeq++,
+    battery, role: currentRole, issue: selectedSignalType || 'General report', sev: currentSev,
+    desc: desc || '(no additional notes)',
+    status: currentRole==='IT' ? 'swap_alert_sent' : 'open',
+    riderName: unit.rider_name, riderPhone: unit.rider_phone,
+    ts: Date.now()
+  };
+  st.incidents.unshift(incident);
+  document.getElementById('f-desc').value = '';
+
+  showToast(currentRole==='IT'
+    ? `Swap-now SMS sent to ${unit.rider_name} (${unit.rider_phone}) on ${battery}.`
+    : `Report logged for ${battery} — ${unit.rider_name} — visible to IT for follow-up.`);
+
+  renderAll(true);
+});
+
+/* ================= Incident feed ================= */
+function renderFeed(newestId){
+  const st = curState();
+  const feed = document.getElementById('feed');
+  document.getElementById('feed-count').textContent = st.incidents.length+' total';
+  if(st.incidents.length===0){
+    feed.innerHTML = '<div class="empty-feed">No incidents yet.<br>IT alerts and Customer Service reports will appear here.</div>';
+    return;
+  }
+  feed.innerHTML = st.incidents.map(i=>{
+    const statusLabel = {open:'Open',swap_alert_sent:'Swap alert sent',followed_up:'Rider followed up',resolved:'Resolved'}[i.status];
+    let actions = '';
+    if(i.status==='open') actions += `<button class="mini-btn it" data-act="notify" data-seq="${i.seq}">⚡ IT: send swap-now alert</button>`;
+    if(i.status==='swap_alert_sent') actions += `<button class="mini-btn cs" data-act="followup" data-seq="${i.seq}">☎ CS: follow up with rider</button>`;
+    if(i.status!=='resolved') actions += `<button class="mini-btn" data-act="resolve" data-seq="${i.seq}">Mark resolved</button>`;
+    return `
+    <div class="incident ${i.seq===newestId?'pulse-new':''}">
+      <div class="row1"><span class="bid">${i.battery}</span><span class="pill sev-${i.sev}">${i.sev}</span></div>
+      <div class="desc"><b style="color:var(--text)">${i.issue}.</b> ${i.desc}</div>
+      <div class="meta" style="margin-bottom:6px;">
+        <span style="color:var(--muted);">${i.riderName||''} <span class="rider-phone" style="color:var(--muted-2);">${i.riderPhone||''}</span></span>
+      </div>
+      <div class="meta">
+        <span class="role-tag">${i.role}</span>
+        <span class="status-tag ${i.status}">${statusLabel}</span>
+        <span>${timeAgo(i.ts)}</span>
+      </div>
+      <div class="actions">${actions}</div>
+    </div>`;
+  }).join('');
+}
+document.getElementById('feed').addEventListener('click', (e)=>{
+  const btn = e.target.closest('.mini-btn'); if(!btn) return;
+  const seq = Number(btn.dataset.seq);
+  const inc = curState().incidents.find(i=>i.seq===seq); if(!inc) return;
+  if(btn.dataset.act==='notify'){ inc.status='swap_alert_sent'; showToast(`Swap-now SMS sent to ${inc.riderName||'rider'} (${inc.riderPhone||inc.battery}).`); }
+  if(btn.dataset.act==='followup'){ inc.status='followed_up'; showToast(`Customer Service called ${inc.riderName||'the rider'} to confirm the swap.`); }
+  if(btn.dataset.act==='resolve'){ inc.status='resolved'; showToast(`${inc.battery} incident resolved.`); }
+  renderAll();
+});
+
+/* ================= Toast ================= */
+let toastTimer;
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="#35D68A" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>${msg}`;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('show'), 3200);
+}
+
+/* ================= Rider directory ================= */
+let riderSearch = '';
+function renderRiderDirectory(){
+  const c = curCompany();
+  const tbody = document.getElementById('rider-tbody');
+  const q = riderSearch.trim().toUpperCase();
+  const rows = c.units.filter(u=>{
+    if(!q) return true;
+    return u.id.includes(q) || u.rider_name.toUpperCase().includes(q) || u.rider_phone.replace(/\s/g,'').includes(q.replace(/\s/g,''));
+  });
+  document.getElementById('rider-count').textContent = `${rows.length} of ${c.units.length} riders`;
+  if(rows.length===0){
+    tbody.innerHTML = '<tr class="empty-rider-row"><td colspan="7">No riders match that search.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(u=>`
+    <tr class="${u.id===selectedId?'sel-row':''}" data-id="${u.id}">
+      <td><div class="rider-name-cell"><span class="rider-avatar">${initials(u.rider_name)}</span>${u.rider_name}</div></td>
+      <td><span class="rider-phone">${u.rider_phone}</span></td>
+      <td><span class="rider-battery-id">${u.id}</span></td>
+      <td><span class="rider-vt-pill">${u.vehicle_type}</span></td>
+      <td>${u.zone}</td>
+      <td><span class="rider-status-dot ${u.status}"></span>${u.status}</td>
+      <td><button class="mini-btn it" data-tel="${u.rider_phone}">📞 Call</button></td>
+    </tr>
+  `).join('');
+  tbody.querySelectorAll('tr[data-id]').forEach(tr=>{
+    tr.addEventListener('click', (e)=>{
+      if(e.target.closest('button')) return;
+      selectedId = tr.dataset.id;
+      renderDetail(); renderRackSelectionOnly(); renderBatterySelect(); renderSignalPicker(); renderRiderDirectory();
+      document.getElementById('detail-panel').scrollIntoView({behavior:'smooth', block:'center'});
+    });
+  });
+  tbody.querySelectorAll('button[data-tel]').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      showToast(`Dialing ${btn.dataset.tel}…`);
+    });
+  });
+}
+document.getElementById('rider-search-box').addEventListener('input', (e)=>{
+  riderSearch = e.target.value;
+  renderRiderDirectory();
+});
+
+/* ================= Live monitor / real-time engine ================= */
+function pushLog(bid, text, sev){
+  const st = curState();
+  st.logLines.unshift({ts:Date.now(), bid, text, sev});
+  st.logLines = st.logLines.slice(0,60);
+}
+function renderMonitor(){
+  const st = curState();
+  const box = document.getElementById('monitor');
+  if(st.logLines.length===0){ box.innerHTML = '<div style="color:var(--muted-2);">Listening for telemetry… no signals yet.</div>'; return; }
+  box.innerHTML = st.logLines.slice(0,25).map(l=>`<div class="mline sev-${l.sev}"><span class="ts">${shortTs(l.ts)}</span><span class="bidm">${l.bid}</span><span>${l.text}</span></div>`).join('');
+}
+
+function tickLive(){
+  const c = curCompany();
+  const st = curState();
+  // jitter a handful of units
+  const sample = [];
+  const n = Math.min(4, c.units.length);
+  while(sample.length<n){
+    const u = c.units[Math.floor(Math.random()*c.units.length)];
+    if(!sample.includes(u)) sample.push(u);
+  }
+  sample.forEach(u=>{
+    const drift = (u.status==='flagged' ? -(0.6+Math.random()*1.4) : -(0.15+Math.random()*0.5));
+    u.live_soc = Math.max(2, Math.min(99, u.live_soc + drift + (Math.random()<0.12 ? 30+Math.random()*20 : 0)));
+    u.live_soc = +u.live_soc.toFixed(1);
+
+    // threshold checks -> generate signals
+    const sigs = st.signals[u.id] = st.signals[u.id] || [];
+    const already = t => sigs.some(s=>s.type===t);
+    if(u.drain_rate_hr>45 && !already('Rapid drain detected') && Math.random()<0.5){
+      sigs.push({type:'Rapid drain detected', ts:Date.now(), severity:'crit'});
+      pushLog(u.id, `rapid drain detected — ${u.drain_rate_hr}%/hr (fleet norm ~15%/hr)`, 'sev-crit');
+    }
+    if(u.volt_std>1.6 && !already('Voltage instability') && Math.random()<0.4){
+      sigs.push({type:'Voltage instability', ts:Date.now(), severity:'crit'});
+      pushLog(u.id, `voltage instability — σ ${u.volt_std}V under load`, 'sev-crit');
+    }
+    if(u.live_soc<15 && !already('Critical charge — swap needed') && Math.random()<0.6){
+      sigs.push({type:'Critical charge — swap needed', ts:Date.now(), severity:'warn'});
+      pushLog(u.id, `live SOC at ${u.live_soc}% — swap recommended`, 'sev-warn');
+    }
+    if(sigs.length>4) st.signals[u.id] = sigs.slice(-4);
+  });
+  renderStats();
+  renderMonitor();
+  renderRack();
+  const b = c.units.find(x=>x.id===selectedId);
+  if(b){
+    const el = document.getElementById('live-soc-val');
+    if(el) el.textContent = b.live_soc.toFixed(1)+'%';
+  }
+  if(document.getElementById('sig-picker')) renderSignalPicker();
+}
+
+/* ================= Clock ================= */
+function tickClock(){ document.getElementById('clock').textContent = nowClock(); }
+setInterval(tickClock, 1000); tickClock();
+setInterval(tickLive, 3200);
+
+/* ================= Render all ================= */
+function renderAll(highlightNewest){
+  const c = curCompany();
+  document.documentElement.style.setProperty('--accent', c.accent);
+  document.documentElement.style.setProperty('--accent-dim', c.accent+'55');
+  renderTabs();
+  renderPageHead();
+  renderFilters();
+  renderRack();
+  renderDetail();
+  renderBars();
+  renderStats();
+  renderBatterySelect();
+  renderRoleContext();
+  renderSignalPicker();
+  const newestId = highlightNewest ? curState().incidentSeq-1 : null;
+  renderFeed(newestId);
+  renderMonitor();
+  renderRiderDirectory();
+}
+
+/* init */
+selectedId = curCompany().units.find(u=>u.status==='flagged')?.id || curCompany().units[0].id;
+renderAll();
+</script>
+</body>
+</html>
