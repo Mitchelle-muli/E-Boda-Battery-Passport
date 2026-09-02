@@ -1,3 +1,4 @@
+ HEAD
 # KORE2 Battery SOH Analysis — Project Map
 
 Tracking the State of Health (SOH) of electric boda boda batteries (KOFA's Kore2 network), using the CRISP-DM methodology.
@@ -43,3 +44,6 @@ jupyter notebook notebooks/kore2_battery_performance_analysis.ipynb
 ```
 
 Open `dashboard/fleet_ops_dashboard.html` in any browser to use the deployed tool.
+
+# E-Boda-Battery-Passport
+ fec706eb16d7686c10e74ab8a4428706f7c2980b
